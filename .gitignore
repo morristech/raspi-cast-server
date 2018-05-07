@@ -1,3 +1,5 @@
 node_modules
 loader.mp4
+.env
 *~
+server.js
