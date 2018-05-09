@@ -6,7 +6,6 @@ const OMXPlayer = require('node-omxplayer-raspberry-pi-cast');
 const spawn = require('child_process').spawn;
 const ip = require('ip');
 
-const WEBSOCKET_SERVER_PORT_LEGACY = 1337;
 const WEBSOCKET_SERVER_PORT = 1338;
 const HTTP_SERVER_PORT = 8080;
 
@@ -14,10 +13,6 @@ const VERSION = "STABLE_0.1.2"
 
 const app = express();
 const server = require('http').Server(app);
-
-const wssLegacy = new WebSocket.Server({ port: WEBSOCKET_SERVER_PORT_LEGACY }, () => {
-  console.log("WebSocket server listening on %d", WEBSOCKET_SERVER_PORT_LEGACY );
-});
 
 const wss = new WebSocket.Server({ port: WEBSOCKET_SERVER_PORT }, () => {
   console.log("WebSocket server listening on %d", WEBSOCKET_SERVER_PORT);
@@ -41,7 +36,6 @@ const cast = {
   id: null
 };
 
-const wsClientsLegacy = [];
 const wsClients = [];
 
 const DEFAULT_HEADERS = {
@@ -65,11 +59,6 @@ function getPlaybackStatus(host) {
 
 
 function stateChange() {
-  wsClientsLegacy.forEach((client) => {
-    if (client.ws.readyState == WebSocket.OPEN)
-      client.ws.send(JSON.stringify({ isPlaying: isPlaying(client.address) }));
-  });
-
   wsClients.forEach((client) => {
     if (client.ws.readyState == WebSocket.OPEN)
       client.ws.send(JSON.stringify({ messageType: "playbackStatus", playbackStatus: getPlaybackStatus(client.address) }));
@@ -423,12 +412,6 @@ app.get("/getVersion", (req, res) => {
   writeJSONResponse(res, { status: success, version: VESRSION });
 });
 
-wssLegacy.on('connection', (ws, req) => {
-  wsClientsLegacy.push({ ws: ws, address: req.connection.remoteAddress });
-
-  ws.send(JSON.stringify({ isPlaying: isPlaying(req.connection.remoteAddress) }));
-});
-
 wss.on('connection', (ws, req) => {
   const client = { 
     ws: ws, 
@@ -462,98 +445,4 @@ server.listen(HTTP_SERVER_PORT, () => {
     ["-powersave", "off", "-blank", "0"]
   );
   printIPAddress();
-});
-
-/* Deprecated Functionality */
-app.get("/cast", castVideo);
-
-app.get("/volumeUp", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.increaseVolume();
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.get("/volumeDown", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.decreaseVolume();
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.get("/isPlaying", (req, res) => {
- if (cast.process && !cast.process.ready) {
-    res.writeHead(400, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: NO_CAST, isPlaying: false });
-  } else  {
-    res.writeHead(200, DEFAULT_HEADERS)
-    writeJSONResponse(res, { isPlaying: isPlaying(req.connection.remoteAddress), status: SUCCESS });
-  }
-});
-
-app.get("/togglePause", (req, res) => {
-  if (validateRequest(req, res)) { 
-    if (cast.playing) {
-      cast.process.pause();
-      cast.playing = false;
-      stateChange();
-    } else {
-      cast.process.play();
-      cast.playing = true;
-      stateChange();
-    }
-
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.post("/increaseSpeed", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.increaseSpeed();
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.post("/decreaseSpeed", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.decreaseSpeed();
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.get("/showSubtitles", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.showSubtitles();
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.get("/hideSubtitles", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.hideSubtitles();
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.get("/skipBackwards", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.seek(-30 * 10**6);
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
-});
-
-app.get("/skipForward", (req, res) => {
-  if (validateRequest(req, res)) {
-    cast.process.seek(30 * 10**6);
-    res.writeHead(200, DEFAULT_HEADERS);
-    writeJSONResponse(res, { status: SUCCESS });
-  }
 });

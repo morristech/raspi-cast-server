@@ -2,8 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const localEnvPath = path.join(process.cwd(), '.env');
-const localEnv = `SOCKET_PORT=81
-PORT=8080
+const localEnv = `SOCKET_PORT=8181
 
 `;
 

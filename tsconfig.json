@@ -12,15 +12,12 @@
     "allowJs": true,
     "experimentalDecorators": true,
     "removeComments": false,
-    "strict": true,
     "skipLibCheck": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
     "noImplicitThis": true,
-    "alwaysStrict": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
@@ -31,7 +28,8 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "typeRoots": [
-      "./node_modules/json-d-ts"
+      "./node_modules/json-d-ts",
+      "typings"
     ]
   },
   "include": [
