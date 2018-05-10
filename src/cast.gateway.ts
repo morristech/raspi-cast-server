@@ -13,7 +13,7 @@ import { Client, Socket } from 'socket.io';
 // import uuid from 'uuid';
 
 import { Player } from './components/Player';
-import { Screen } from './components/Screen';
+// import { Screen } from './components/Screen';
 import { YoutubeDl } from './components/YoutubeDl';
 import { PlaybackStatus } from './enums/PlaybackStatus';
 import { CastClient } from './types/CastClient';
@@ -23,7 +23,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
 
   constructor(
-    @Inject(Screen) private screen: Screen,
+    // @Inject(Screen) private screen: Screen,
     @Inject(Player) private player: Player,
     @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
   ) {}
@@ -63,28 +63,22 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     this.notifyStatusChange(PlaybackStatus.STOPPED);
     this.player.state.loading = true;
     // this.player.state.castId = uuid();
-    this.player.init();
 
-    return from(this.youtubeDl.getInfo(data)).pipe(
-      tap(() => this.screen.clear()),
-      switchMap(info =>
-        this.player.init({
-          source: info.url,
-          output: 'both',
-          loop: true,
-          noOsd: true,
-        }),
-      ),
-      tap(() => {
-        this.player.omx.on('close', () => {
-          this.player.state.playing = false;
-          this.notifyStatusChange(PlaybackStatus.STOPPED);
-          this.screen.printIp();
-        });
+    return from(this.player.init()).pipe(
+      switchMap(() => this.youtubeDl.getInfo(data)),
+      // tap(() => this.screen.clear()),
+      tap(() => console.log('after youtube info')),
+      switchMap(info => this.player.init(info.url, true)),
+      tap(() => console.log('after youtube init')),
+      switchMap(() => this.player.getDuration()),
+      tap(duration => {
+        console.log('after duration', duration);
         this.player.state.loading = false;
-      }),
-      switchMap(() => this.player.omx.getDuration()),
-      tap(() => {
+        // this.player.omx.on('close', () => {
+        //   this.player.state.playing = false;
+        //   this.notifyStatusChange(PlaybackStatus.STOPPED);
+        //   this.screen.printIp();
+        // });
         this.player.state.playing = true;
         this.notifyStatusChange(PlaybackStatus.PLAYING);
       }),
@@ -123,7 +117,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('duration')
   public handleDuration(): Observable<WsResponse<any>> {
-    return from(this.player.omx.getDuration()).pipe(
+    return from(this.player.getDuration()).pipe(
       map(data => ({ event: 'duration', data })),
     );
   }
@@ -189,7 +183,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   private notifyStatusChange(status: PlaybackStatus) {
     this.clients.forEach(client => {
-      client.socket.emit('playbackStatus', status);
+      client.socket.emit('status', status);
     });
   }
 }
