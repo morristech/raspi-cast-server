@@ -7,7 +7,11 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "node scripts/postinstall",
     "dev": "pm2-dev pm2/development.config.js",
-    "build": "tsc"
+    "build": "tsc",
+    "deploy:setup": "pm2 deploy pm2/production.config.js production setup",
+    "deploy": "pm2 deploy pm2/production.config.js production update",
+    "start": "pm2 start pm2/production.config.js",
+    "stop": "pm2 stop pm2/production.config.js"
   },
   "repository": {
     "type": "git",

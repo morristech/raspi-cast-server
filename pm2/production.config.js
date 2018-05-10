@@ -1,9 +1,12 @@
+const path = require('path');
+
 module.exports = {
   apps: [
     {
-      name: 'Cast server',
-      script: path.join(process.cwd(), 'build/main.js'),
-      env_production: {
+      name: 'cast_server',
+      script: path.join(process.cwd(), 'dist/main.js'),
+      instances  : 1,
+      env: {
         NODE_ENV: 'production'
       }
     }
@@ -11,12 +14,13 @@ module.exports = {
 
   deploy : {
     production : {
-      user : 'node',
-      host : '212.83.163.1',
-      ref  : 'origin/master',
-      repo : 'git@github.com:repo.git',
-      path : '/home/pi/cast',
-      'post-deploy' : 'npm install && npm run build && pm2 reload ecosystem.config.js --env production'
+      user : 'pi',
+      host : '192.168.1.41',
+      ref  : 'origin/dev',
+      repo : 'git@gitlab.com:charjac/cast-server.git',
+      path : '/home/pi/cast-server',
+      'pre-setup': 'sudo apt-get install git && sudo apt-get install omxplayer && sudo apt-get install figlet',
+      'post-deploy' : 'source ~/.zshrc && npm i && npm run stop && npm run build && npm start'
     }
   }
 };

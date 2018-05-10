@@ -3,7 +3,7 @@ const path = require('path');
 module.exports = {
   apps: [
     {
-      name: 'Cast_server',
+      name: 'cast_server',
       script: path.join(process.cwd(), 'src/main.ts'),
       watch: true,
       instances  : 1,

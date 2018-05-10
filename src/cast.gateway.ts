@@ -1,3 +1,4 @@
+import { Inject } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -5,6 +6,7 @@ import {
   WebSocketGateway,
   WsResponse,
 } from '@nestjs/websockets';
+import autobind from 'autobind-decorator';
 import { from, interval, Observable, of } from 'rxjs';
 import { filter, map, switchMap, tap } from 'rxjs/operators';
 import { Client, Socket } from 'socket.io';
@@ -21,17 +23,19 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
 
   constructor(
-    private screen: Screen,
-    private player: Player,
-    private youtubeDl: YoutubeDl,
+    @Inject(Screen) private screen: Screen,
+    @Inject(Player) private player: Player,
+    @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
   ) {}
 
+  @autobind
   public handleConnection(socket: Socket) {
     const address = socket.request.connection.remoteAddress;
+    console.log('connection', address);
     const subscription = interval(500)
       .pipe(
-        filter(() => this.player.omx.running && this.player.state.playing),
-        switchMap(this.player.omx.getPosition),
+        filter(() => !!this.player.omx),
+        switchMap(() => this.player.omx.getPosition()),
       )
       .subscribe(position => socket.emit('position', position));
 
@@ -54,8 +58,9 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('foo')
-  public foo() {
-    return of('foo');
+  public foo(): Observable<WsResponse<any>> {
+    console.log('FOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO');
+    return of({ event: 'foo', data: 'foo' });
   }
 
   @SubscribeMessage('cast')
