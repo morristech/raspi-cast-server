@@ -8,12 +8,12 @@ import {
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
 import { from, interval, Observable } from 'rxjs';
-import { filter, map, switchMap, tap } from 'rxjs/operators';
+import { delay, filter, map, switchMap, tap } from 'rxjs/operators';
 import { Client, Socket } from 'socket.io';
 // import uuid from 'uuid';
 
 import { Player } from './components/Player';
-// import { Screen } from './components/Screen';
+import { Screen } from './components/Screen';
 import { YoutubeDl } from './components/YoutubeDl';
 import { PlaybackStatus } from './enums/PlaybackStatus';
 import { CastClient } from './types/CastClient';
@@ -23,7 +23,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
 
   constructor(
-    // @Inject(Screen) private screen: Screen,
+    @Inject(Screen) private screen: Screen,
     @Inject(Player) private player: Player,
     @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
   ) {}
@@ -35,7 +35,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
       .pipe(
         filter(() => !!this.player.omx),
         filter(() => this.player.omx.running && this.player.state.playing),
-        switchMap(() => this.player.omx.getPosition()),
+        switchMap(() => this.player.getPosition()),
       )
       .subscribe(position => socket.emit('position', position));
 
@@ -64,21 +64,19 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     this.player.state.loading = true;
     // this.player.state.castId = uuid();
 
-    return from(this.player.init()).pipe(
+    return from(this.player.init(undefined, true, 'both', true)).pipe(
       switchMap(() => this.youtubeDl.getInfo(data)),
-      // tap(() => this.screen.clear()),
-      tap(() => console.log('after youtube info')),
-      switchMap(info => this.player.init(info.url, true)),
-      tap(() => console.log('after youtube init')),
+      tap(() => this.screen.clear()),
+      switchMap(info => this.player.init(info.url)),
+      delay(3000),
       switchMap(() => this.player.getDuration()),
       tap(duration => {
-        console.log('after duration', duration);
         this.player.state.loading = false;
-        // this.player.omx.on('close', () => {
-        //   this.player.state.playing = false;
-        //   this.notifyStatusChange(PlaybackStatus.STOPPED);
-        //   this.screen.printIp();
-        // });
+        this.player.omx.on('close', () => {
+          this.player.state.playing = false;
+          this.notifyStatusChange(PlaybackStatus.STOPPED);
+          this.screen.printIp();
+        });
         this.player.state.playing = true;
         this.notifyStatusChange(PlaybackStatus.PLAYING);
       }),
@@ -88,7 +86,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('play')
   public handlePlay(): Observable<WsResponse<any>> {
-    return from(this.player.omx.play()).pipe(
+    return from(this.player.play()).pipe(
       tap(() => {
         this.player.state.playing = true;
         this.notifyStatusChange(PlaybackStatus.PLAYING);
@@ -99,7 +97,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('pause')
   public handlePause(): Observable<WsResponse<any>> {
-    return from(this.player.omx.pause()).pipe(
+    return from(this.player.pause()).pipe(
       tap(() => {
         this.player.state.playing = false;
         this.notifyStatusChange(PlaybackStatus.PAUSED);
@@ -110,7 +108,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('status')
   public handleStatus(): Observable<WsResponse<any>> {
-    return from(this.player.omx.getPlaybackStatus()).pipe(
+    return from(this.player.getStatus()).pipe(
       map(data => ({ event: 'status', data })),
     );
   }
@@ -128,15 +126,13 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     data: any,
   ): Observable<WsResponse<any>> {
     return from(
-      data
-        ? this.player.omx.setPosition(Number(data))
-        : this.player.omx.getPosition(),
+      data ? this.player.setPosition(Number(data)) : this.player.getPosition(),
     ).pipe(map(pos => ({ event: 'position', data: pos < 0 ? 0 : pos })));
   }
 
   @SubscribeMessage('quit')
   public handleQuit(): Observable<WsResponse<any>> {
-    return from(this.player.omx.quit()).pipe(
+    return from(this.player.quit()).pipe(
       tap(() => {
         this.player.state.playing = false;
         this.notifyStatusChange(PlaybackStatus.STOPPED);
@@ -147,7 +143,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('seek')
   public handleSeek(client: Socket, data: any): Observable<WsResponse<any>> {
-    return from(this.player.omx.seek(Number(data))).pipe(
+    return from(this.player.seek(Number(data))).pipe(
       map(seek => ({ event: 'seek', data: seek })),
     );
   }
@@ -155,9 +151,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('volume')
   public handleVolume(client: Socket, data: any): Observable<WsResponse<any>> {
     return from(
-      data
-        ? this.player.omx.setVolume(parseFloat(data))
-        : this.player.omx.getVolume(),
+      data ? this.player.setVolume(parseFloat(data)) : this.player.getVolume(),
     ).pipe(map(volume => ({ event: 'volume', data: volume })));
   }
 

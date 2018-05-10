@@ -1,14 +1,10 @@
 import { Component } from '@nestjs/common';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
+import { promisify } from 'util';
 
 import { PlaybackStatus } from '../enums/PlaybackStatus';
 import { PlayerState } from '../types/PlayerState';
-
-const defaultOptions = {
-  output: 'both',
-  noOsd: true,
-};
 
 const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 
@@ -20,11 +16,16 @@ export class Player {
     loading: false,
   };
 
-  public init(source = spinner, loop = false): Promise<any> {
+  public init(
+    source = spinner,
+    loop = false,
+    output = 'both',
+    noOsd = false,
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.omx) {
         this.omx = new OmxPlayer(
-          { source, loop, ...defaultOptions },
+          { source, loop, output, noOsd },
           (err, data) => {
             if (err) {
               reject(err);
@@ -34,7 +35,7 @@ export class Player {
           },
         );
       } else {
-        this.omx.newSource({ source, loop, ...defaultOptions }, (err, data) => {
+        this.omx.newSource({ source, loop, output, noOsd }, (err, data) => {
           if (err) {
             reject(err);
           } else {
@@ -45,16 +46,44 @@ export class Player {
     });
   }
 
-  public getDuration() {
-    return new Promise((resolve, reject) => {
-      this.omx.getDuration((err: any, duration: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(duration);
-        }
-      });
-    });
+  public getDuration(): Promise<any> {
+    return promisify(this.omx.getDuration)();
+  }
+
+  public play(): Promise<any> {
+    return promisify(this.omx.play)();
+  }
+
+  public pause() {
+    return promisify(this.omx.pause)();
+  }
+
+  public getStatus(): Promise<any> {
+    return promisify(this.omx.getPlaybackStatus)();
+  }
+
+  public getPosition(): Promise<any> {
+    return promisify(this.omx.getPosition)();
+  }
+
+  public setPosition(position: number): Promise<any> {
+    return promisify(this.omx.setPosition)(position);
+  }
+
+  public quit(): Promise<any> {
+    return promisify(this.omx.quit)();
+  }
+
+  public seek(position: number): Promise<any> {
+    return promisify(this.omx.seek)(position);
+  }
+
+  public setVolume(volume: number): Promise<any> {
+    return promisify(this.omx.setVolume)(volume);
+  }
+
+  public getVolume(): Promise<any> {
+    return promisify(this.omx.getVolume)();
   }
 
   public isPlaying(): boolean {
