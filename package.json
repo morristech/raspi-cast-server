@@ -6,12 +6,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "node scripts/postinstall",
-    "dev": "pm2-dev pm2/development.config.js",
+    "dev": "pm2 start ecosystem.config.js --env development",
     "build": "tsc",
-    "deploy:setup": "pm2 deploy pm2/production.config.js production setup",
-    "deploy": "pm2 deploy pm2/production.config.js production update",
-    "start": "pm2 start pm2/production.config.js",
-    "stop": "pm2 stop pm2/production.config.js"
+    "deploy:setup": "pm2 deploy ecosystem.config.js production setup",
+    "deploy": "pm2 deploy ecosystem.config.js production update",
+    "deploydev:setup": "pm2 deploy ecosystem.config.js development setup",
+    "deploydev": "pm2 deploy ecosystem.config.js development update",
+    "start": "pm2 start ecosystem.config.js --env production",
+    "stop": "pm2 stop ecosystem.config.js"
   },
   "repository": {
     "type": "git",

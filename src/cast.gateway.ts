@@ -59,6 +59,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('cast')
   public handleCast(client: Client, data: any): Observable<WsResponse<any>> {
+    console.log('CAST !!!!');
     this.player.state.playing = false;
     this.notifyStatusChange(PlaybackStatus.STOPPED);
     this.player.state.loading = true;
@@ -68,7 +69,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
       switchMap(() => this.youtubeDl.getInfo(data)),
       tap(() => this.screen.clear()),
       switchMap(info => this.player.init(info.url)),
-      delay(3000),
+      delay(3000), // sorry ... cant make it work without it :/
       switchMap(() => this.player.getDuration()),
       tap(duration => {
         this.player.state.loading = false;
