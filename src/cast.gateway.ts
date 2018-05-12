@@ -2,14 +2,18 @@ import { Inject } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
+import fs from 'fs';
+import path from 'path';
 import { from, interval, Observable } from 'rxjs';
 import { delay, filter, map, switchMap, tap } from 'rxjs/operators';
-import { Client, Socket } from 'socket.io';
+import { Client, Server, Socket } from 'socket.io';
+import socketLogger from 'socket.io-logger';
 // import uuid from 'uuid';
 
 import { Player } from './components/Player';
@@ -19,7 +23,8 @@ import { PlaybackStatus } from './enums/PlaybackStatus';
 import { CastClient } from './types/CastClient';
 
 @WebSocketGateway()
-export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
+export class CastSocket
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   private clients: CastClient[] = [];
 
   constructor(
@@ -27,6 +32,20 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     @Inject(Player) private player: Player,
     @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
   ) {}
+
+  public afterInit(io: Server) {
+    const options =
+      process.env.NODE_ENV === 'production'
+        ? {
+            stream: fs.createWriteStream(
+              path.join(process.cwd(), 'logs/socket.log'),
+              { flags: 'a' },
+            ),
+          }
+        : {};
+
+    io.use(socketLogger(options));
+  }
 
   @autobind
   public handleConnection(socket: Socket) {
