@@ -12,6 +12,7 @@ export class YoutubeDl {
           if (err) {
             reject(err);
           } else {
+            console.log('youtube info', result);
             resolve(result);
           }
         },

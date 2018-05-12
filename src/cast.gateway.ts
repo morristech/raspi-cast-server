@@ -8,19 +8,21 @@ import {
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
-import fs from 'fs';
-import path from 'path';
-import { from, interval, Observable } from 'rxjs';
+// import fs from 'fs';
+// import path from 'path';
+import { from, interval, Observable, of } from 'rxjs';
 import { delay, filter, map, switchMap, tap } from 'rxjs/operators';
 import { Client, Server, Socket } from 'socket.io';
-import socketLogger from 'socket.io-logger';
+// import socketLogger from 'socket.io-logger';
 // import uuid from 'uuid';
 
 import { Player } from './components/Player';
 import { Screen } from './components/Screen';
 import { YoutubeDl } from './components/YoutubeDl';
+import { CastType } from './enums/CastType';
 import { PlaybackStatus } from './enums/PlaybackStatus';
 import { CastClient } from './types/CastClient';
+import { CastOptions } from './types/CastOptions';
 
 @WebSocketGateway()
 export class CastSocket
@@ -31,20 +33,23 @@ export class CastSocket
     @Inject(Screen) private screen: Screen,
     @Inject(Player) private player: Player,
     @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
-  ) {}
+  ) {
+    this.player.close$.subscribe(() => {
+      this.notifyStatusChange(PlaybackStatus.STOPPED);
+      this.screen.printIp();
+    });
+  }
 
   public afterInit(io: Server) {
-    const options =
-      process.env.NODE_ENV === 'production'
-        ? {
-            stream: fs.createWriteStream(
-              path.join(process.cwd(), 'logs/socket.log'),
-              { flags: 'a' },
-            ),
-          }
-        : {};
-
-    io.use(socketLogger(options));
+    // const options = {
+    //   stream:
+    //     process.env.NODE_ENV === 'production'
+    //       ? fs.createWriteStream(path.join(process.cwd(), 'logs/socket.log'), {
+    //           flags: 'a',
+    //         })
+    //       : process.stdout,
+    // };
+    // io.use(socketLogger(options));
   }
 
   @autobind
@@ -77,26 +82,28 @@ export class CastSocket
   }
 
   @SubscribeMessage('cast')
-  public handleCast(client: Client, data: any): Observable<WsResponse<any>> {
-    console.log('CAST !!!!');
+  public handleCast(
+    client: Client,
+    options: CastOptions,
+  ): Observable<WsResponse<any>> {
+    this.player.state.loading = true;
     this.player.state.playing = false;
     this.notifyStatusChange(PlaybackStatus.STOPPED);
-    this.player.state.loading = true;
     // this.player.state.castId = uuid();
-
     return from(this.player.init(undefined, true, 'both', true)).pipe(
-      switchMap(() => this.youtubeDl.getInfo(data)),
+      switchMap(() => {
+        switch (options.type) {
+          case CastType.YOUTUBEDL:
+          default:
+            return this.youtubeDl.getInfo(options.data);
+        }
+      }),
       tap(() => this.screen.clear()),
       switchMap(info => this.player.init(info.url)),
-      delay(3000), // sorry ... cant make it work without it :/
+      delay(3000), // :'( ... cant make it work without it
       switchMap(() => this.player.getDuration()),
       tap(duration => {
         this.player.state.loading = false;
-        this.player.omx.on('close', () => {
-          this.player.state.playing = false;
-          this.notifyStatusChange(PlaybackStatus.STOPPED);
-          this.screen.printIp();
-        });
         this.player.state.playing = true;
         this.notifyStatusChange(PlaybackStatus.PLAYING);
       }),
@@ -127,10 +134,19 @@ export class CastSocket
   }
 
   @SubscribeMessage('status')
-  public handleStatus(): Observable<WsResponse<any>> {
-    return from(this.player.getStatus()).pipe(
-      map(data => ({ event: 'status', data })),
-    );
+  public handleStatus(client: Socket): Observable<WsResponse<any>> {
+    return !!this.player.omx && this.player.omx.running
+      ? from(this.player.getStatus()).pipe(
+          tap(status => {
+            if (status === PlaybackStatus.PLAYING) {
+              this.player
+                .getDuration()
+                .then(duration => client.emit('duration', duration));
+            }
+          }),
+          map(data => ({ event: 'status', data })),
+        )
+      : of({ event: 'status', data: PlaybackStatus.STOPPED });
   }
 
   @SubscribeMessage('duration')

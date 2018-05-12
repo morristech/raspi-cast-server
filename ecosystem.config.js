@@ -35,7 +35,7 @@ module.exports = {
     },
     production : {
       ...commonDeployConf,
-      ref  : 'origin/master',
+      ref  : 'origin/dev',
       path : '/home/pi/cast-server',
       'post-deploy' : 'source ~/.zshrc && npm i && npm run stop && npm run build && npm start'
     }

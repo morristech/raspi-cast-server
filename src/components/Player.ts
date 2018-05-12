@@ -1,6 +1,8 @@
 import { Component } from '@nestjs/common';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
+import { fromEvent, Subject } from 'rxjs';
+import { merge, tap } from 'rxjs/operators';
 import { promisify } from 'util';
 
 import { PlaybackStatus } from '../enums/PlaybackStatus';
@@ -10,6 +12,7 @@ const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 
 @Component()
 export class Player {
+  public close$ = new Subject<void>();
   public omx: OmxPlayer;
   public state: PlayerState = {
     playing: false,
@@ -43,47 +46,53 @@ export class Player {
           }
         });
       }
+      this.close$.pipe(
+        merge(fromEvent(this.omx as any, 'close')),
+        tap(() => {
+          this.state.playing = false;
+        }),
+      );
     });
   }
 
   public getDuration(): Promise<any> {
-    return promisify(this.omx.getDuration)();
+    return this.promisifyAndBind(this.omx.getDuration)();
   }
 
   public play(): Promise<any> {
-    return promisify(this.omx.play)();
+    return this.promisifyAndBind(this.omx.play)();
   }
 
   public pause() {
-    return promisify(this.omx.pause)();
+    return this.promisifyAndBind(this.omx.pause)();
   }
 
   public getStatus(): Promise<any> {
-    return promisify(this.omx.getPlaybackStatus)();
+    return this.promisifyAndBind(this.omx.getPlaybackStatus)();
   }
 
   public getPosition(): Promise<any> {
-    return promisify(this.omx.getPosition)();
+    return this.promisifyAndBind(this.omx.getPosition)();
   }
 
   public setPosition(position: number): Promise<any> {
-    return promisify(this.omx.setPosition)(position);
+    return this.promisifyAndBind(this.omx.setPosition)(position);
   }
 
   public quit(): Promise<any> {
-    return promisify(this.omx.quit)();
+    return this.promisifyAndBind(this.omx.quit)();
   }
 
   public seek(position: number): Promise<any> {
-    return promisify(this.omx.seek)(position);
+    return this.promisifyAndBind(this.omx.seek)(position);
   }
 
   public setVolume(volume: number): Promise<any> {
-    return promisify(this.omx.setVolume)(volume);
+    return this.promisifyAndBind(this.omx.setVolume)(volume);
   }
 
   public getVolume(): Promise<any> {
-    return promisify(this.omx.getVolume)();
+    return this.promisifyAndBind(this.omx.getVolume)();
   }
 
   public isPlaying(): boolean {
@@ -96,5 +105,9 @@ export class Player {
         ? PlaybackStatus.PLAYING
         : PlaybackStatus.PAUSED
       : PlaybackStatus.STOPPED;
+  }
+
+  private promisifyAndBind(method: any) {
+    return promisify(method.bind(this.omx));
   }
 }
