@@ -1,9 +1,11 @@
 import { Component } from '@nestjs/common';
 import youtubeDl from 'youtube-dl';
 
+import { CastMeta } from '../types/CastMeta';
+
 @Component()
 export class YoutubeDl {
-  public getInfo(video: any): Promise<any> {
+  public getInfo(video: any): Promise<CastMeta> {
     return new Promise((resolve, reject) => {
       youtubeDl.getInfo(
         video,
@@ -12,7 +14,6 @@ export class YoutubeDl {
           if (err) {
             reject(err);
           } else {
-            console.log('youtube info', result);
             resolve(result);
           }
         },

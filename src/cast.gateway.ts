@@ -12,7 +12,7 @@ import autobind from 'autobind-decorator';
 // import path from 'path';
 import { from, interval, Observable, of } from 'rxjs';
 import { delay, filter, map, switchMap, tap } from 'rxjs/operators';
-import { Client, Server, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 // import socketLogger from 'socket.io-logger';
 // import uuid from 'uuid';
 
@@ -83,7 +83,7 @@ export class CastSocket
 
   @SubscribeMessage('cast')
   public handleCast(
-    client: Client,
+    client: Socket,
     options: CastOptions,
   ): Observable<WsResponse<any>> {
     this.player.state.loading = true;
@@ -98,7 +98,11 @@ export class CastSocket
             return this.youtubeDl.getInfo(options.data);
         }
       }),
-      tap(() => this.screen.clear()),
+      tap(({ title, description, thumbnail, url }) => {
+        this.screen.clear();
+        this.player.state.meta = { title, description, thumbnail, url };
+        client.emit('meta', { title, description, thumbnail, url });
+      }),
       switchMap(info => this.player.init(info.url)),
       delay(3000), // :'( ... cant make it work without it
       switchMap(() => this.player.getDuration()),
@@ -107,7 +111,7 @@ export class CastSocket
         this.player.state.playing = true;
         this.notifyStatusChange(PlaybackStatus.PLAYING);
       }),
-      map(duration => ({ event: 'cast', data: duration })),
+      map(duration => ({ event: 'duration', data: duration })),
     );
   }
 
@@ -134,11 +138,12 @@ export class CastSocket
   }
 
   @SubscribeMessage('status')
-  public handleStatus(client: Socket): Observable<WsResponse<any>> {
+  public handleStatus(client: any): Observable<WsResponse<any>> {
     return !!this.player.omx && this.player.omx.running
       ? from(this.player.getStatus()).pipe(
           tap(status => {
             if (status === PlaybackStatus.PLAYING) {
+              client.emit('meta', this.player.state.meta);
               this.player
                 .getDuration()
                 .then(duration => client.emit('duration', duration));
