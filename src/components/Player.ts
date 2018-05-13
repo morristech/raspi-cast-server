@@ -2,7 +2,7 @@ import { Component } from '@nestjs/common';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
 import { fromEvent, Subject } from 'rxjs';
-import { merge, tap } from 'rxjs/operators';
+import { merge } from 'rxjs/operators';
 import { promisify } from 'util';
 
 import { PlaybackStatus } from '../enums/PlaybackStatus';
@@ -14,10 +14,7 @@ const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 export class Player {
   public close$ = new Subject<void>();
   public omx: OmxPlayer;
-  public state: PlayerState = {
-    playing: false,
-    loading: false,
-  };
+  public state: PlayerState = {};
 
   public init(
     source = spinner,
@@ -31,6 +28,7 @@ export class Player {
           { source, loop, output, noOsd },
           (err, data) => {
             if (err) {
+              console.error(err);
               reject(err);
             } else {
               resolve(data);
@@ -46,12 +44,8 @@ export class Player {
           }
         });
       }
-      this.close$.pipe(
-        merge(fromEvent(this.omx as any, 'close')),
-        tap(() => {
-          this.state.playing = false;
-        }),
-      );
+
+      this.close$.pipe(merge(fromEvent(this.omx as any, 'close')));
     });
   }
 
@@ -88,15 +82,25 @@ export class Player {
   }
 
   public setVolume(volume: number): Promise<any> {
+    this.state.volume = volume;
     return this.promisifyAndBind(this.omx.setVolume)(volume);
   }
 
   public getVolume(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getVolume)();
+    if (this.state.volume) {
+      return Promise.resolve(this.state.volume);
+    } else {
+      return this.promisifyAndBind(this.omx.getVolume)().then(
+        (volume: number) => {
+          this.state.volume = volume;
+          return volume;
+        },
+      );
+    }
   }
 
   public isPlaying(): boolean {
-    return this.state.playing && this.omx.running;
+    return this.omx && this.omx.running;
   }
 
   public getPlaybackStatus(): string {

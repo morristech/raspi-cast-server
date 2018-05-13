@@ -1,8 +1,7 @@
 import { CastMeta } from './CastMeta';
 
 export interface PlayerState {
-  playing: boolean;
-  loading: boolean;
+  volume?: number;
   meta?: CastMeta;
   castId?: string;
   locked?: boolean;
