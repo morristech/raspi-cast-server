@@ -2,7 +2,7 @@ import { Component } from '@nestjs/common';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
 import { fromEvent, Subject } from 'rxjs';
-import { merge } from 'rxjs/operators';
+import { merge, tap } from 'rxjs/operators';
 import { promisify } from 'util';
 
 import { PlaybackStatus } from '../enums/PlaybackStatus';
@@ -14,7 +14,9 @@ const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 export class Player {
   public close$ = new Subject<void>();
   public omx: OmxPlayer;
-  public state: PlayerState = {};
+  public state: PlayerState = {
+    isPlaying: false,
+  };
 
   public init(
     source = spinner,
@@ -45,12 +47,21 @@ export class Player {
         });
       }
 
-      this.close$.pipe(merge(fromEvent(this.omx as any, 'close')));
+      this.close$.pipe(
+        merge(
+          fromEvent(this.omx as any, 'close'),
+          tap(() => (this.state.isPlaying = false)),
+        ),
+      );
     });
   }
 
   public getDuration(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getDuration)();
+    return this.promisifyAndBind(this.omx.getDuration)().then(
+      (duration: number) => ({
+        duration: Math.round(duration / 1000 / 1000),
+      }),
+    );
   }
 
   public play(): Promise<any> {
@@ -62,11 +73,17 @@ export class Player {
   }
 
   public getStatus(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getPlaybackStatus)();
+    return this.promisifyAndBind(this.omx.getPlaybackStatus)().then(
+      (status: string) => ({
+        status,
+      }),
+    );
   }
 
   public getPosition(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getPosition)();
+    return this.promisifyAndBind(this.omx.getPosition)().then(
+      (position: number) => ({ position: Math.round(position / 1000 / 1000) }),
+    );
   }
 
   public setPosition(position: number): Promise<any> {
@@ -93,14 +110,14 @@ export class Player {
       return this.promisifyAndBind(this.omx.getVolume)().then(
         (volume: number) => {
           this.state.volume = volume;
-          return volume;
+          return { volume };
         },
       );
     }
   }
 
   public isPlaying(): boolean {
-    return this.omx && this.omx.running;
+    return this.state.isPlaying && this.omx && !!this.omx.running;
   }
 
   public getPlaybackStatus(): string {
@@ -109,6 +126,10 @@ export class Player {
         ? PlaybackStatus.PLAYING
         : PlaybackStatus.PAUSED
       : PlaybackStatus.STOPPED;
+  }
+
+  public getMeta() {
+    return this.state.meta;
   }
 
   private promisifyAndBind(method: any) {

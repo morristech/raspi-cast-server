@@ -10,7 +10,7 @@ import {
 import autobind from 'autobind-decorator';
 // import fs from 'fs';
 // import path from 'path';
-import { from, interval, Observable, of } from 'rxjs';
+import { forkJoin, from, interval, Observable, of } from 'rxjs';
 import { delay, filter, map, switchMap, tap } from 'rxjs/operators';
 import { Server, Socket } from 'socket.io';
 // import socketLogger from 'socket.io-logger';
@@ -82,6 +82,37 @@ export class CastSocket
     }
   }
 
+  @SubscribeMessage('initialState')
+  public handleInitialState(client: Socket): Observable<WsResponse<any>> {
+    const data: any = {
+      isPending: false,
+      status: PlaybackStatus.STOPPED,
+      meta: this.player.getMeta(),
+    };
+    return !!this.player.omx && this.player.omx.running
+      ? from(this.player.getStatus()).pipe(
+          switchMap(({ status }) => {
+            const actions = [of({ status })];
+            if (status === PlaybackStatus.PLAYING.toString()) {
+              actions.push(from(this.player.getDuration()));
+              actions.push(from(this.player.getVolume()));
+            }
+            return forkJoin(actions);
+          }),
+          map(results =>
+            results.reduce(
+              (acc, result) => ({
+                ...acc,
+                ...result,
+              }),
+              data,
+            ),
+          ),
+          map(state => ({ event: 'initialState', data: state })),
+        )
+      : of({ event: 'initialState', data });
+  }
+
   @SubscribeMessage('cast')
   public handleCast(
     client: Socket,
@@ -100,76 +131,27 @@ export class CastSocket
       // tap(() => this.screen.clear()),
       switchMap(({ url }) => this.player.init(url)),
       delay(5000),
-      switchMap(() => this.handleStatus(client)),
+      tap(() => (this.player.state.isPlaying = true)),
+      switchMap(() => this.handleInitialState(client)),
     );
   }
 
   @SubscribeMessage('play')
-  public handlePlay(): Observable<WsResponse<any>> {
-    return from(this.player.play()).pipe(
-      tap(() => {
-        this.notifyStatusChange(PlaybackStatus.PLAYING);
-      }),
-      map(data => ({ event: 'play', data })),
-    );
+  public async handlePlay() {
+    await this.player.play();
+    this.notifyStatusChange(PlaybackStatus.PLAYING);
   }
 
   @SubscribeMessage('pause')
-  public handlePause(): Observable<WsResponse<any>> {
-    return from(this.player.pause()).pipe(
-      tap(() => {
-        this.notifyStatusChange(PlaybackStatus.PAUSED);
-      }),
-      map(data => ({ event: 'pause', data })),
-    );
-  }
-
-  @SubscribeMessage('status')
-  public handleStatus(client: Socket): Observable<WsResponse<any>> {
-    return !!this.player.omx && this.player.omx.running
-      ? from(this.player.getStatus()).pipe(
-          tap(status => {
-            if (status === PlaybackStatus.PLAYING) {
-              client.emit('meta', this.player.state.meta);
-              Promise.all([
-                this.player.getDuration(),
-                this.player.getVolume(),
-              ]).then(([duration, volume]) => {
-                client.emit('duration', duration);
-                client.emit('volume', volume);
-              });
-            }
-          }),
-          map(data => ({ event: 'status', data })),
-        )
-      : of({ event: 'status', data: PlaybackStatus.STOPPED });
-  }
-
-  @SubscribeMessage('duration')
-  public handleDuration(): Observable<WsResponse<any>> {
-    return from(this.player.getDuration()).pipe(
-      map(data => ({ event: 'duration', data })),
-    );
-  }
-
-  @SubscribeMessage('position')
-  public handlePosition(
-    client: Socket,
-    data: any,
-  ): Observable<WsResponse<any>> {
-    return from(
-      data ? this.player.setPosition(Number(data)) : this.player.getPosition(),
-    ).pipe(map(pos => ({ event: 'position', data: pos < 0 ? 0 : pos })));
+  public async handlePause() {
+    await this.player.pause();
+    this.notifyStatusChange(PlaybackStatus.PAUSED);
   }
 
   @SubscribeMessage('quit')
-  public handleQuit(): Observable<WsResponse<any>> {
-    return from(this.player.quit()).pipe(
-      tap(() => {
-        this.notifyStatusChange(PlaybackStatus.STOPPED);
-      }),
-      map(data => ({ event: 'quit', data })),
-    );
+  public async handleQuit() {
+    await this.player.quit();
+    this.notifyStatusChange(PlaybackStatus.STOPPED);
   }
 
   @SubscribeMessage('seek')
@@ -183,7 +165,7 @@ export class CastSocket
   public handleVolume(client: Socket, data: any): Observable<WsResponse<any>> {
     return from(
       data ? this.player.setVolume(parseFloat(data)) : this.player.getVolume(),
-    ).pipe(map(volume => ({ event: 'volume', data: volume })));
+    ).pipe(map(volume => ({ event: 'volume', data: { volume } })));
   }
 
   // @SubscribeMessage('increaseVolume')
@@ -208,7 +190,7 @@ export class CastSocket
 
   private notifyStatusChange(status: PlaybackStatus) {
     this.clients.forEach(client => {
-      client.socket.emit('status', status);
+      client.socket.emit('status', { status });
     });
   }
 }
