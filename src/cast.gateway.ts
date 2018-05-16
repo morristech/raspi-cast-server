@@ -59,7 +59,7 @@ export class CastSocket
     const address = socket.request.connection.remoteAddress;
     const subscription = interval(1000)
       .pipe(
-        filter(() => this.player.isPlaying()),
+        filter(() => this.player.isPlaying() && !this.player.state.isPending),
         switchMap(() => this.player.getPosition()),
       )
       .subscribe(position => socket.emit('position', position));
@@ -156,8 +156,8 @@ export class CastSocket
 
   @SubscribeMessage('seek')
   public handleSeek(client: Socket, data: any): Observable<WsResponse<any>> {
-    return from(this.player.seek(Number(data))).pipe(
-      map(seek => ({ event: 'seek', data: seek })),
+    return from(this.player.setPosition(Number(data))).pipe(
+      map(() => ({ event: 'seek', data: { isPending: false } })),
     );
   }
 

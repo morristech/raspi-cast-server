@@ -16,6 +16,7 @@ export class Player {
   public omx: OmxPlayer;
   public state: PlayerState = {
     isPlaying: false,
+    isPending: false,
   };
 
   public init(
@@ -87,7 +88,12 @@ export class Player {
   }
 
   public setPosition(position: number): Promise<any> {
-    return this.promisifyAndBind(this.omx.setPosition)(position);
+    return this.promisifyAndBind(this.omx.setPosition)(
+      position * 1000 * 1000,
+    ).then(() => {
+      this.state.isPending = false;
+      return position;
+    });
   }
 
   public quit(): Promise<any> {
@@ -95,7 +101,11 @@ export class Player {
   }
 
   public seek(position: number): Promise<any> {
-    return this.promisifyAndBind(this.omx.seek)(position);
+    this.state.isPending = true;
+    return this.promisifyAndBind(this.omx.seek)(position).then(() => {
+      this.state.isPending = false;
+      return position;
+    });
   }
 
   public setVolume(volume: number): Promise<any> {
