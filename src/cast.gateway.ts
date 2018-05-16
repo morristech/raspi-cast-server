@@ -163,20 +163,18 @@ export class CastSocket
 
   @SubscribeMessage('volume')
   public handleVolume(client: Socket, data: any): Observable<WsResponse<any>> {
-    return from(
-      data ? this.player.setVolume(parseFloat(data)) : this.player.getVolume(),
-    ).pipe(map(volume => ({ event: 'volume', data: { volume } })));
+    return from(this.player.setVolume(parseFloat(data)));
   }
 
-  // @SubscribeMessage('increaseVolume')
-  // public handleIncreaseVolume(): Observable<WsResponse<any>> {
-  //   return from(this.player.omx.increaseVolume());
-  // }
+  @SubscribeMessage('volume+')
+  public handleIncreaseVolume(): Observable<WsResponse<any>> {
+    return from(this.player.increaseVolume());
+  }
 
-  // @SubscribeMessage('decreaseVolume')
-  // public handleDecreaseVolume(): Observable<WsResponse<any>> {
-  //   return from(this.player.omx.decreaseVolume());
-  // }
+  @SubscribeMessage('volume-')
+  public handleDecreaseVolume(): Observable<WsResponse<any>> {
+    return from(this.player.decreaseVolume());
+  }
 
   // @SubscribeMessage('showSubtitles')
   // public handleShowSubtitles(): Observable<WsResponse<any>> {

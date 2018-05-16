@@ -116,6 +116,20 @@ export class Player {
     }
   }
 
+  public increaseVolume(): Promise<any> {
+    this.state.volume = undefined;
+    return this.promisifyAndBind(this.omx.increaseVolume)().then(
+      this.getVolume,
+    );
+  }
+
+  public decreaseVolume(): Promise<any> {
+    this.state.volume = undefined;
+    return this.promisifyAndBind(this.omx.decreaseVolume)().then(
+      this.getVolume,
+    );
+  }
+
   public isPlaying(): boolean {
     return this.state.isPlaying && this.omx && !!this.omx.running;
   }
