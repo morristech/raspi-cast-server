@@ -23,6 +23,7 @@ import { CastType } from './enums/CastType';
 import { PlaybackStatus } from './enums/PlaybackStatus';
 import { CastClient } from './types/CastClient';
 import { CastOptions } from './types/CastOptions';
+import { InitialState } from './types/Socket';
 
 @WebSocketGateway()
 export class CastSocket
@@ -83,7 +84,9 @@ export class CastSocket
   }
 
   @SubscribeMessage('initialState')
-  public handleInitialState(client: Socket): Observable<WsResponse<any>> {
+  public handleInitialState(
+    client: Socket,
+  ): Observable<WsResponse<InitialState>> {
     const data: any = {
       isPending: false,
       status: PlaybackStatus.STOPPED,
@@ -117,7 +120,7 @@ export class CastSocket
   public handleCast(
     client: Socket,
     options: CastOptions,
-  ): Observable<WsResponse<any>> {
+  ): Observable<WsResponse<InitialState>> {
     this.notifyStatusChange(PlaybackStatus.STOPPED);
 
     return from(this.player.init(undefined, true, 'both', true)).pipe(
@@ -137,43 +140,46 @@ export class CastSocket
   }
 
   @SubscribeMessage('play')
-  public async handlePlay() {
+  public async handlePlay(): Promise<void> {
     await this.player.play();
     this.notifyStatusChange(PlaybackStatus.PLAYING);
   }
 
   @SubscribeMessage('pause')
-  public async handlePause() {
+  public async handlePause(): Promise<void> {
     await this.player.pause();
     this.notifyStatusChange(PlaybackStatus.PAUSED);
   }
 
   @SubscribeMessage('quit')
-  public async handleQuit() {
+  public async handleQuit(): Promise<void> {
     await this.player.quit();
     this.notifyStatusChange(PlaybackStatus.STOPPED);
   }
 
   @SubscribeMessage('seek')
-  public handleSeek(client: Socket, data: any): Observable<WsResponse<any>> {
+  public handleSeek(
+    client: Socket,
+    data: string,
+  ): Observable<WsResponse<{ isPending: boolean }>> {
     return from(this.player.setPosition(Number(data))).pipe(
       map(() => ({ event: 'seek', data: { isPending: false } })),
     );
   }
 
   @SubscribeMessage('volume')
-  public handleVolume(client: Socket, data: any): Observable<WsResponse<any>> {
-    return from(this.player.setVolume(parseFloat(data)));
+  public handleVolume(client: Socket, data: string): void {
+    this.player.setVolume(parseFloat(data));
   }
 
   @SubscribeMessage('volume+')
-  public handleIncreaseVolume(): Observable<WsResponse<any>> {
-    return from(this.player.increaseVolume());
+  public handleIncreaseVolume(): void {
+    this.player.increaseVolume();
   }
 
   @SubscribeMessage('volume-')
-  public handleDecreaseVolume(): Observable<WsResponse<any>> {
-    return from(this.player.decreaseVolume());
+  public handleDecreaseVolume(): void {
+    this.player.decreaseVolume();
   }
 
   // @SubscribeMessage('showSubtitles')
@@ -186,7 +192,7 @@ export class CastSocket
   //   return from(this.player.omx.showSubtitles());
   // }
 
-  private notifyStatusChange(status: PlaybackStatus) {
+  private notifyStatusChange(status: PlaybackStatus): void {
     this.clients.forEach(client => {
       client.socket.emit('status', { status });
     });
