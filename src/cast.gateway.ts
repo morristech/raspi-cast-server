@@ -2,18 +2,15 @@ import { Inject } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
-  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
-// import fs from 'fs';
-// import path from 'path';
+
 import { forkJoin, from, interval, Observable, of } from 'rxjs';
 import { delay, filter, map, switchMap, tap } from 'rxjs/operators';
-import { Server, Socket } from 'socket.io';
-// import socketLogger from 'socket.io-logger';
+import { Socket } from 'socket.io';
 // import uuid from 'uuid';
 
 import { Player } from './components/Player';
@@ -26,8 +23,7 @@ import { CastOptions } from './types/CastOptions';
 import { InitialState } from './types/Socket';
 
 @WebSocketGateway()
-export class CastSocket
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
+export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
 
   constructor(
@@ -41,18 +37,6 @@ export class CastSocket
         this.screen.printIp();
       }
     });
-  }
-
-  public afterInit(io: Server) {
-    // const options = {
-    //   stream:
-    //     process.env.NODE_ENV === 'production'
-    //       ? fs.createWriteStream(path.join(process.cwd(), 'logs/socket.log'), {
-    //           flags: 'a',
-    //         })
-    //       : process.stdout,
-    // };
-    // io.use(socketLogger(options));
   }
 
   @autobind
@@ -161,9 +145,9 @@ export class CastSocket
   public handleSeek(
     client: Socket,
     data: string,
-  ): Observable<WsResponse<{ isPending: boolean }>> {
+  ): Observable<WsResponse<{ isSeeking: boolean }>> {
     return from(this.player.setPosition(Number(data))).pipe(
-      map(() => ({ event: 'seek', data: { isPending: false } })),
+      map(() => ({ event: 'seek', data: { isSeeking: false } })),
     );
   }
 
