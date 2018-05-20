@@ -15,14 +15,14 @@ if (!process.env.RASPI_IP) {
 const commonDeployConf = {
   user : 'pi',
   host : process.env.RASPI_IP,
-  repo : 'git@gitlab.com:charjac/cast-server.git',
+  repo : 'git@github.com:charjac/raspi-cast-server.git',
   'pre-setup': 'sudo apt-get install git && sudo apt-get install omxplayer && sudo apt-get install figlet',
 }
 
 module.exports = {
   apps: [
     {
-      name: env === 'production' ? 'cast-server' : 'cast-server-dev',
+      name: env === 'production' ? 'raspicast-server' : 'raspicast-server-dev',
       script: path.join(process.cwd(), main),
       instances  : 1,
       watch: env === 'development',

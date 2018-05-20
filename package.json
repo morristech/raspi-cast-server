@@ -21,9 +21,6 @@
     "url": "git@github.com:charjac/raspi-cast-server.git"
   },
   "author": "Charles Jacquin",
-  "contributors": [
-    "Giorgian Borca-Tasciuc"
-  ],
   "license": "GNU",
   "bugs": {
     "url": "https://github.com/charjac/raspi-cast-server/issues"
