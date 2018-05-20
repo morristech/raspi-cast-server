@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CastMeta, Errors } from 'raspi-cast-common';
 import youtubeDl from 'youtube-dl';
 
-import { Player } from './Player';
+import { Player } from '../common/player.service';
 
 @Injectable()
 export class YoutubeDl {

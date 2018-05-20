@@ -11,17 +11,23 @@ import {
   CastOptions,
   CastType,
   Errors,
+  InitialState,
   PlaybackStatus,
 } from 'raspi-cast-common';
-import { forkJoin, from, interval, Observable, of } from 'rxjs';
+import { forkJoin, from, interval, Observable, of, Subscription } from 'rxjs';
 import { catchError, delay, filter, map, switchMap, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 // import uuid from 'uuid';
 
-import { Player } from './components/Player';
-import { Screen } from './components/Screen';
-import { YoutubeDl } from './components/YoutubeDl';
-import { CastClient, InitialState } from './types/Socket';
+import { Player } from './common/player.service';
+import { Screen } from './common/screen.service';
+import { YoutubeDl } from './youtubedl/youtubeDl.service';
+
+interface CastClient {
+  address: string;
+  socket: Socket;
+  subscription: Subscription;
+}
 
 @WebSocketGateway()
 export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {

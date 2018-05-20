@@ -10,7 +10,7 @@ dotenv.load({
 import { NestFactory } from '@nestjs/core';
 
 import { CastModule } from './cast.module';
-import { Screen } from './components/Screen';
+import { Screen } from './common/screen.service';
 
 (async () => {
   const app = await NestFactory.create(CastModule, {});
