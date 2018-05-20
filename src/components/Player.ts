@@ -1,4 +1,4 @@
-import { Component } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
 import { fromEvent, Subject } from 'rxjs';
@@ -10,7 +10,7 @@ import { PlayerState } from '../types/PlayerState';
 
 const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 
-@Component()
+@Injectable()
 export class Player {
   public close$ = new Subject<void>();
   public omx: OmxPlayer;

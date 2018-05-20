@@ -5,6 +5,6 @@ import { Screen } from './components/Screen';
 import { YoutubeDl } from './components/YoutubeDl';
 
 @Module({
-  components: [CastSocket, Screen, Player, YoutubeDl],
+  providers: [CastSocket, Screen, Player, YoutubeDl],
 })
 export class CastModule {}

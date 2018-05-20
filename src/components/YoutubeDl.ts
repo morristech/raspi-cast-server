@@ -1,10 +1,10 @@
-import { Component, Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import youtubeDl from 'youtube-dl';
 
 import { CastMeta } from '../types/CastMeta';
 import { Player } from './Player';
 
-@Component()
+@Injectable()
 export class YoutubeDl {
   constructor(@Inject(Player) private player: Player) {}
   public getInfo(video: any): Promise<CastMeta> {

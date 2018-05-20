@@ -1,8 +1,8 @@
-import { Component } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { address } from 'ip';
 
-@Component()
+@Injectable()
 export class Screen {
   public clear() {
     console.log('\u001B[2J');
