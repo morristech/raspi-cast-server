@@ -1,11 +1,20 @@
 const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.load({
+  path: path.join(process.cwd(), `env/local.env`),
+});
 
 const env = process.argv[process.argv.length - 1];
 const main = env === 'production' ? 'dist/main.js' : 'src/main.ts';
 
+if (!process.env.RASPI_IP) {
+  throw new Error('You must specify RASPI_IP environment variable');
+}
+
 const commonDeployConf = {
   user : 'pi',
-  host : '192.168.1.41',
+  host : process.env.RASPI_IP,
   repo : 'git@gitlab.com:charjac/cast-server.git',
   'pre-setup': 'sudo apt-get install git && sudo apt-get install omxplayer && sudo apt-get install figlet',
 }

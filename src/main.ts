@@ -17,8 +17,8 @@ import { Screen } from './components/Screen';
   const screen = app.get<Screen>(Screen);
 
   await app.listen(Number(process.env.SOCKET_PORT));
-  spawn('setterm', ['-powersave', 'off', '-blank', '0']);
   if (process.env.NODE_ENV === 'production') {
+    spawn('setterm', ['-powersave', 'off', '-blank', '0']);
     screen.printIp();
   }
 })();

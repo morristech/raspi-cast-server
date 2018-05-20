@@ -1,7 +1,7 @@
 {
-  "name": "cast-server",
+  "name": "raspi-cast-server",
   "version": "0.0.1",
-  "description": "Server software for the cast software.",
+  "description": "Node.js app wich allow a web-extension to control omxplayer via a socket.io gateway.",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -17,14 +17,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/raspberry-pi-cast/cast-server.git"
+    "url": "git@github.com:charjac/raspi-cast-server.git"
   },
-  "author": "Giorgian Borca-Tasciuc",
-  "license": "GPL-3.0",
+  "author": "Charles Jacquin",
+  "contributors": [
+    "Giorgian Borca-Tasciuc"
+  ],
+  "license": "GNU",
   "bugs": {
-    "url": "https://gitlab.com/raspberry-pi-cast/cast-server/issues"
+    "url": "https://github.com/charjac/raspi-cast-server/issues"
   },
-  "homepage": "https://gitlab.com/raspberry-pi-cast/cast-server#README",
+  "homepage": "https://github.com/charjac/raspi-cast-server",
   "dependencies": {
     "@nestjs/common": "^4.6.6",
     "@nestjs/core": "^4.6.6",

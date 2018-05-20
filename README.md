@@ -1,116 +1,48 @@
-# cast-server
+# raspi-cast-server
 
-[Instrucciones en español](docs/README-es_ES.md)
-[Instructions en français](docs/README-fr_FR.md)
-[Instrucțiuni în limba română](docs/README-ro_RO.md)
-
-The server for the cast software, which allows videos to be cast from a web browser to a Raspberry Pi.
-
-Note: Due to Node.js no longer supporting ARMv6 in their newer releases, at least a Raspberry Pi 2 is required. There is a plan to eventually backport `cast-server` to the original Raspberry Pi.
+Forked and largely inspired by [https://gitlab.com/raspberry-pi-cast/cast-server](https://gitlab.com/raspberry-pi-cast/cast-server)
+thanks to Giorgian Borca-Tasciuc
 
 ## Installation
 
 See the [Raspberry Pi Website](https://www.raspberrypi.org/downloads/) for instructions on how to install Raspbian.
 
-Once Raspbian in installed and connected to the internet, run:
+Once Raspbian in installed and connected to the internet you need to install node (nvm is cool !!).
+
+You will also need to enable ssh with raspi-config.
+
+## Setup
+
+Clone the repo on a computer wich is on the same network than your raspberry pi.
+Install dependencies:
 
 ```bash
-curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
-sudo apt install nodejs git omxplayer figlet
-git clone https://gitlab.com/raspberry-pi-cast/cast-server
-cd cast-server
-npm install
+git clone git@github.com:charjac/raspi-cast-server.git
+cd raspi-cast-server
+npm i
 ```
 
-## Running
+find your raspberry pi ip, if you dont know it try:
 
 ```bash
-setterm -powersave off -blank 0
-cd cast-server
-node server.js
+arp -na | grep -i b8:27:eb
 ```
 
-Now, to cast videos to your Raspberry Pi, please use the
-[cast add-on](https://gitlab.com/raspberry-pi-cast/cast-addon-firefox).
+Edit env/local.env file with your raspberry pi ip address
 
-## API
+## Deploy and Run (thx pm2)
 
-_cast_: GET, Casts a video.
-Parameters:
-&nbsp;&nbsp;**video**: _string_, URL of the video to play.
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;**status**: _int_, MISSING_PARAMETERS if _video_ if not specified, SUCCESS otherwise.
-}
+First, we need to setup the raspberry pi ans install all dependencies needed,
+then we will install and run the server using pm2.
 
-_togglePause_: GET, Toggles the pause status of a video.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
+```bash
+npm run deploy:setup
+npm run deploy
+```
 
-_skipForward_: GET, Skips the video forward by 30 seconds.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
+That's all folks !
 
-_skipBackwards_: GET, Skips the video backwards by 30 seconds.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
+## Cast
 
-_volumeUp_: GET, Raises the video volume.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
-
-_volumeDown_: GET, Lowers the video volume.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
-
- _isPlaying_: GET, Returns whether the calling client has a video whether that is playing.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;isPlaying: _isPlaying_, true if the calling client has a playing video, false otherwise.
-}
-
-_speedUp_: GET, Increases the playback speed of the video.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
-
-_slowDown_: GET, Decreases the playback speed of the video.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
-
- _toggleSubtitles_: GET, Toggles whether the video has subtitles.
-Parameters:
-&nbsp;&nbsp;_None_
-Return:
-&nbsp;&nbsp;JSON-Encoded Data: {
-&nbsp;&nbsp;&nbsp;&nbsp;status: _int_, INVALID_PARAMETERS if the client IP address does not match the casting IP address, EXPIRED_CAST if no longer costing, SUCCESS otherwise.
-}
+Now, to cast videos to your Raspberry Pi, you can use this firefox add on
+[raspi-cast-web-ext](https://github.com/charjac/raspi-cast-web-ext).
