@@ -12,6 +12,7 @@ import {
   CastType,
   Errors,
   InitialState,
+  Playback,
   PlaybackStatus,
 } from 'raspi-cast-common';
 import { forkJoin, from, interval, Observable, of, Subscription } from 'rxjs';
@@ -77,7 +78,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('initialState')
   public handleInitialState(
     client: Socket,
-  ): Observable<WsResponse<InitialState | Errors>> {
+  ): Observable<WsResponse<InitialState | string>> {
     const data: any = {
       isPending: false,
       status: PlaybackStatus.STOPPED,
@@ -114,7 +115,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   public handleCast(
     client: Socket,
     options: CastOptions,
-  ): Observable<WsResponse<InitialState | Errors>> {
+  ): Observable<WsResponse<InitialState | string>> {
     this.notifyStatusChange(PlaybackStatus.STOPPED);
 
     return from(this.player.init(undefined, true, 'both', true)).pipe(
@@ -203,7 +204,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   //   return from(this.player.omx.showSubtitles());
   // }
 
-  private notifyStatusChange(status: PlaybackStatus): void {
+  private notifyStatusChange(status: Playback): void {
     this.clients.forEach(client => {
       client.socket.emit('status', { status });
     });
