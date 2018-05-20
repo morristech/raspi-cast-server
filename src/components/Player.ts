@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
+import { Errors, PlaybackStatus } from 'raspi-cast-common';
 import { fromEvent, Subject } from 'rxjs';
 import { merge, tap } from 'rxjs/operators';
 import { promisify } from 'util';
 
-import { PlaybackStatus } from '../enums/PlaybackStatus';
 import { PlayerState } from '../types/PlayerState';
 
 const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
@@ -32,7 +32,7 @@ export class Player {
           (err, data) => {
             if (err) {
               console.error(err);
-              reject(err);
+              reject(new Error(Errors.PLAYER_UNAVAILABLE));
             } else {
               resolve(data);
             }
@@ -41,7 +41,7 @@ export class Player {
       } else {
         this.omx.newSource({ source, loop, output, noOsd }, (err, data) => {
           if (err) {
-            reject(err);
+            reject(new Error(Errors.PLAYER_UNAVAILABLE));
           } else {
             resolve(data);
           }

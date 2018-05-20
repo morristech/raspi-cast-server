@@ -1,4 +1,4 @@
-import { CastMeta } from './CastMeta';
+import { CastMeta } from 'raspi-cast-common';
 
 export interface PlayerState {
   isPending: boolean;

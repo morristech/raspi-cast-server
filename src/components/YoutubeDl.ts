@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { CastMeta, Errors } from 'raspi-cast-common';
 import youtubeDl from 'youtube-dl';
 
-import { CastMeta } from '../types/CastMeta';
 import { Player } from './Player';
 
 @Injectable()
@@ -14,7 +14,7 @@ export class YoutubeDl {
         ['-format=bestvideo[ext!=webm]+bestaudio[ext!=webm]/best[ext!=webm]'],
         (err: Error, result: any) => {
           if (err) {
-            reject(err);
+            reject(new Error(Errors.YOUTUBEDL));
           } else {
             this.player.state.meta = {
               title: result.title,
