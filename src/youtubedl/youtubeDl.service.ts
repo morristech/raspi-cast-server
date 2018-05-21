@@ -14,7 +14,7 @@ export class YoutubeDl {
         ['-format=bestvideo[ext!=webm]+bestaudio[ext!=webm]/best[ext!=webm]'],
         (err: Error, result: any) => {
           if (err) {
-            reject(new Error(Errors.UNSUPORTED_STREAM));
+            reject(Errors.UNSUPORTED_STREAM);
           } else {
             this.player.state.meta = {
               title: result.title,

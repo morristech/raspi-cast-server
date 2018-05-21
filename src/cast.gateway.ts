@@ -131,7 +131,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
       delay(5000),
       tap(() => (this.player.state.isPlaying = true)),
       switchMap(() => this.handleInitialState(client)),
-      catchError(err => of({ event: 'error', data: err })),
+      catchError(err => of({ event: 'fail', data: err })),
     );
   }
 
