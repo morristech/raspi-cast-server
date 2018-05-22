@@ -1,27 +1,30 @@
-import { Inject } from '@nestjs/common';
+import { Inject, UseFilters } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
+  WsException,
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
+import { mergeAll } from 'ramda';
 import {
   CastOptions,
   CastType,
-  Errors,
   InitialState,
   Playback,
   PlaybackStatus,
 } from 'raspi-cast-common';
 import { forkJoin, from, interval, Observable, of, Subscription } from 'rxjs';
-import { catchError, delay, filter, map, switchMap, tap } from 'rxjs/operators';
+import { catchError, filter, map, switchMap, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 // import uuid from 'uuid';
 
+import { CastExceptionFilter } from './common/exception.filter';
 import { Player } from './common/player.service';
 import { Screen } from './common/screen.service';
+import { logger } from './helpers/logger';
 import { YoutubeDl } from './youtubedl/youtubeDl.service';
 
 interface CastClient {
@@ -35,8 +38,8 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
 
   constructor(
-    @Inject(Screen) private screen: Screen,
     @Inject(Player) private player: Player,
+    @Inject(Screen) private screen: Screen,
     @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
   ) {
     this.player.close$.subscribe(() => {
@@ -50,9 +53,10 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @autobind
   public handleConnection(socket: Socket) {
     const address = socket.request.connection.remoteAddress;
+    console.log('connected', address);
     const subscription = interval(1000)
       .pipe(
-        filter(() => this.player.isPlaying() && !this.player.state.isPending),
+        filter(() => this.player.isPlaying()),
         switchMap(() => this.player.getPosition()),
       )
       .subscribe(position => socket.emit('position', position));
@@ -76,15 +80,14 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('initialState')
-  public handleInitialState(
-    client: Socket,
-  ): Observable<WsResponse<InitialState | string>> {
+  public handleInitialState(client: Socket): Observable<WsResponse<any>> {
     const data: any = {
       isPending: false,
       status: PlaybackStatus.STOPPED,
       meta: this.player.getMeta(),
     };
-    return !!this.player.omx && this.player.omx.running
+    console.log('initial state');
+    return this.player.isPlaying()
       ? from(this.player.getStatus()).pipe(
           switchMap(({ status }) => {
             const actions = [of({ status })];
@@ -94,19 +97,12 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
             }
             return forkJoin(actions);
           }),
-          map(results =>
-            results.reduce(
-              (acc, result) => ({
-                ...acc,
-                ...result,
-              }),
-              data,
-            ),
-          ),
-          map(state => ({ event: 'initialState', data: state })),
-          catchError(err =>
-            of({ event: 'error', data: Errors.PLAYER_UNAVAILABLE }),
-          ),
+          map(mergeAll),
+          map(state => ({
+            event: 'initialState',
+            data: { ...data, ...state },
+          })),
+          catchError(this.handleError),
         )
       : of({ event: 'initialState', data });
   }
@@ -115,9 +111,9 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   public handleCast(
     client: Socket,
     options: CastOptions,
-  ): Observable<WsResponse<InitialState | string>> {
+  ): Observable<WsResponse<InitialState | any>> {
     this.notifyStatusChange(PlaybackStatus.STOPPED);
-
+    console.log('cast');
     return from(this.player.init(undefined, true, 'both', true)).pipe(
       switchMap(() => {
         switch (options.type) {
@@ -126,73 +122,58 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
             return this.youtubeDl.getInfo(options.data);
         }
       }),
-      // tap(() => this.screen.clear()),
+      tap(meta => this.player.setMeta(meta)),
+      tap(() => process.env.NODE_ENV === 'production' && this.screen.clear()),
       switchMap(({ url }) => this.player.init(url)),
-      delay(5000),
-      tap(() => (this.player.state.isPlaying = true)),
       switchMap(() => this.handleInitialState(client)),
-      catchError(err => of({ event: 'fail', data: err })),
+      catchError(this.handleError),
     );
   }
 
+  @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('play')
   public async handlePlay(client: Socket): Promise<void> {
-    try {
-      await this.player.play();
-      this.notifyStatusChange(PlaybackStatus.PLAYING);
-    } catch (err) {
-      client.emit('error', Errors.PLAYER_UNAVAILABLE);
-    }
+    await this.player.play();
+    this.notifyStatusChange(PlaybackStatus.PLAYING);
   }
 
+  @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('pause')
   public async handlePause(client: Socket): Promise<void> {
-    try {
-      await this.player.pause();
-      this.notifyStatusChange(PlaybackStatus.PAUSED);
-    } catch (err) {
-      client.emit('error', Errors.PLAYER_UNAVAILABLE);
-    }
+    await this.player.pause();
+    this.notifyStatusChange(PlaybackStatus.PAUSED);
   }
 
+  @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('quit')
   public async handleQuit(client: Socket): Promise<void> {
-    try {
-      await this.player.quit();
-      this.notifyStatusChange(PlaybackStatus.STOPPED);
-    } catch (err) {
-      client.emit('error', Errors.PLAYER_UNAVAILABLE);
-    }
+    await this.player.quit();
+    this.notifyStatusChange(PlaybackStatus.STOPPED);
   }
 
+  @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('seek')
   public handleSeek(client: Socket, data: string): Observable<WsResponse<any>> {
     return from(this.player.setPosition(Number(data))).pipe(
       map(() => ({ event: 'seek', data: { isSeeking: false } })),
-      catchError(err =>
-        of({ event: 'error', data: Errors.PLAYER_UNAVAILABLE }),
-      ),
     );
   }
 
+  @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('volume')
-  public async handleVolume(client: Socket, data: string): Promise<any> {
-    try {
-      await this.player.setVolume(parseFloat(data));
-    } catch (err) {
-      client.emit('error', Errors.PLAYER_UNAVAILABLE);
-    }
+  public handleVolume(client: Socket, data: string): void {
+    this.player.setVolume(parseFloat(data));
   }
 
-  @SubscribeMessage('volume+')
-  public handleIncreaseVolume(): void {
-    this.player.increaseVolume();
-  }
+  // @SubscribeMessage('volume+')
+  // public handleIncreaseVolume(): void {
+  //   this.player.increaseVolume();
+  // }
 
-  @SubscribeMessage('volume-')
-  public handleDecreaseVolume(): void {
-    this.player.decreaseVolume();
-  }
+  // @SubscribeMessage('volume-')
+  // public handleDecreaseVolume(): void {
+  //   this.player.decreaseVolume();
+  // }
 
   // @SubscribeMessage('showSubtitles')
   // public handleShowSubtitles(): Observable<WsResponse<any>> {
@@ -208,5 +189,11 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     this.clients.forEach(client => {
       client.socket.emit('status', { status });
     });
+  }
+
+  private handleError(err: WsException) {
+    logger.error(err);
+
+    return of({ event: 'fail', data: err });
   }
 }

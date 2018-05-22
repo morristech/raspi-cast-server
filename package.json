@@ -36,11 +36,13 @@
     "express": "^4.16.3",
     "ip": "^1.1.5",
     "node-omxplayer-raspberry-pi-cast": "https://gitlab.com/charjac/node-omxplayer-raspberry-pi-cast.git#typings",
+    "ramda": "^0.25.0",
+    "raspi-cast-common": "https://github.com/charjac/raspi-cast-common.git#master",
     "reflect-metadata": "^0.1.12",
     "rxjs": "^6.1.0",
-    "raspi-cast-common": "https://github.com/charjac/raspi-cast-common.git#master",
     "rxjs-compat": "^6.1.0",
     "uuid": "^3.2.1",
+    "winston": "^3.0.0-rc5",
     "youtube-dl": "^1.12.2"
   },
   "devDependencies": {
@@ -48,6 +50,7 @@
     "@types/express": "^4.11.1",
     "@types/ip": "0.0.31",
     "@types/node": "^10.1.2",
+    "@types/ramda": "^0.25.29",
     "@types/socket.io": "^1.4.33",
     "@types/uuid": "^3.4.3",
     "husky": "^0.14.3",

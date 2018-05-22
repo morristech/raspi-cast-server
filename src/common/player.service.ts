@@ -1,28 +1,27 @@
 import { Injectable } from '@nestjs/common';
+import { WsException } from '@nestjs/websockets';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
-import { CastMeta, Errors, PlaybackStatus } from 'raspi-cast-common';
+import { CastMeta, Errors } from 'raspi-cast-common';
 import { fromEvent, Subject } from 'rxjs';
 import { merge, tap } from 'rxjs/operators';
-import { promisify } from 'util';
+
+import { promisifyAndBind } from '../helpers/utils';
 
 const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 
 export interface PlayerState {
   isPending: boolean;
-  volume?: number;
   isPlaying: boolean;
   meta?: CastMeta;
-  castId?: string;
-  locked?: boolean;
-  masterAdress?: string;
+  volume?: number;
 }
 
 @Injectable()
 export class Player {
   public close$ = new Subject<void>();
-  public omx: OmxPlayer;
-  public state: PlayerState = {
+  private omx: OmxPlayer;
+  private state: PlayerState = {
     isPlaying: false,
     isPending: false,
   };
@@ -34,25 +33,23 @@ export class Player {
     noOsd = false,
   ): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!this.omx) {
-        this.omx = new OmxPlayer(
-          { source, loop, output, noOsd },
-          (err, data) => {
-            if (err) {
-              reject(new Error(Errors.PLAYER_UNAVAILABLE));
-            } else {
-              resolve(data);
-            }
-          },
-        );
-      } else {
-        this.omx.newSource({ source, loop, output, noOsd }, (err, data) => {
+      const onSuccess = (err: Error, data: any) => {
+        setTimeout(() => {
+          console.log('new Omx', err, data);
           if (err) {
-            reject(new Error(Errors.PLAYER_UNAVAILABLE));
+            reject(err);
           } else {
+            if (source !== spinner) {
+              this.state.isPlaying = true;
+            }
             resolve(data);
           }
-        });
+        }, 5000);
+      };
+      if (!this.omx) {
+        this.omx = new OmxPlayer({ source, loop, output, noOsd }, onSuccess);
+      } else {
+        this.omx.newSource({ source, loop, output, noOsd }, onSuccess);
       }
 
       this.close$.pipe(
@@ -64,107 +61,148 @@ export class Player {
     });
   }
 
-  public getDuration(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getDuration)().then(
-      (duration: number) => ({
+  public async getDuration(): Promise<any> {
+    try {
+      const duration: number = await promisifyAndBind(
+        this.omx.getDuration,
+        this.omx,
+      )();
+      return {
         duration: Math.round(duration / 1000 / 1000),
-      }),
-    );
-  }
-
-  public play(): Promise<any> {
-    return this.promisifyAndBind(this.omx.play)();
-  }
-
-  public pause() {
-    return this.promisifyAndBind(this.omx.pause)();
-  }
-
-  public getStatus(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getPlaybackStatus)().then(
-      (status: string) => ({
-        status,
-      }),
-    );
-  }
-
-  public getPosition(): Promise<any> {
-    return this.promisifyAndBind(this.omx.getPosition)().then(
-      (position: number) => ({ position: Math.round(position / 1000 / 1000) }),
-    );
-  }
-
-  public setPosition(position: number): Promise<any> {
-    return this.promisifyAndBind(this.omx.setPosition)(
-      position * 1000 * 1000,
-    ).then(() => {
-      this.state.isPending = false;
-      return position;
-    });
-  }
-
-  public quit(): Promise<any> {
-    return this.promisifyAndBind(this.omx.quit)();
-  }
-
-  public seek(position: number): Promise<any> {
-    this.state.isPending = true;
-    return this.promisifyAndBind(this.omx.seek)(position).then(() => {
-      this.state.isPending = false;
-      return position;
-    });
-  }
-
-  public setVolume(volume: number): Promise<any> {
-    this.state.volume = volume;
-    return this.promisifyAndBind(this.omx.setVolume)(volume);
-  }
-
-  public getVolume(): Promise<any> {
-    if (this.state.volume) {
-      return Promise.resolve(this.state.volume);
-    } else {
-      return this.promisifyAndBind(this.omx.getVolume)().then(
-        (volume: number) => {
-          this.state.volume = volume;
-          return { volume };
-        },
-      );
+      };
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
     }
   }
 
-  public increaseVolume(): Promise<any> {
-    this.state.volume = undefined;
-    return this.promisifyAndBind(this.omx.increaseVolume)().then(
-      this.getVolume,
-    );
+  public async play(): Promise<any> {
+    try {
+      await promisifyAndBind(this.omx.play, this.omx)();
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
   }
 
-  public decreaseVolume(): Promise<any> {
-    this.state.volume = undefined;
-    return this.promisifyAndBind(this.omx.decreaseVolume)().then(
-      this.getVolume,
-    );
+  public async pause() {
+    try {
+      await promisifyAndBind(this.omx.pause, this.omx)();
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async getStatus(): Promise<any> {
+    try {
+      const status = await promisifyAndBind(
+        this.omx.getPlaybackStatus,
+        this.omx,
+      )();
+      return { status };
+    } catch (err) {
+      console.log('status err', err);
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async getPosition(): Promise<any> {
+    try {
+      const position = await promisifyAndBind(this.omx.getPosition, this.omx)();
+      return { position: Math.round(position / 1000 / 1000) };
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async setPosition(position: number): Promise<any> {
+    try {
+      await promisifyAndBind(this.omx.setPosition, this.omx)(
+        position * 1000 * 1000,
+      );
+      this.state.isPending = false;
+      return position;
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async quit(): Promise<any> {
+    try {
+      await promisifyAndBind(this.omx.quit, this.omx)();
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async seek(position: number): Promise<any> {
+    try {
+      this.state.isPending = true;
+      await promisifyAndBind(this.omx.seek, this.omx)(position);
+      this.state.isPending = false;
+      return position;
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async setVolume(volume: number): Promise<any> {
+    try {
+      this.state.volume = volume;
+      await promisifyAndBind(this.omx.setVolume, this.omx)(volume);
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async getVolume(): Promise<any> {
+    if (this.state.volume) {
+      return Promise.resolve(this.state.volume);
+    } else {
+      const volume = await promisifyAndBind(this.omx.getVolume, this.omx)();
+      this.state.volume = volume;
+      return { volume };
+    }
+  }
+
+  public async increaseVolume(): Promise<any> {
+    try {
+      this.state.volume = undefined;
+      await promisifyAndBind(this.omx.increaseVolume, this.omx)();
+      return this.getVolume();
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
+  }
+
+  public async decreaseVolume(): Promise<any> {
+    try {
+      this.state.volume = undefined;
+      await promisifyAndBind(this.omx.decreaseVolume, this.omx)();
+      return this.getVolume();
+    } catch (err) {
+      throw new WsException(Errors.PLAYER_UNAVAILABLE);
+    }
   }
 
   public isPlaying(): boolean {
-    return this.state.isPlaying && this.omx && !!this.omx.running;
-  }
-
-  public getPlaybackStatus(): string {
-    return !!this.omx
-      ? this.isPlaying()
-        ? PlaybackStatus.PLAYING
-        : PlaybackStatus.PAUSED
-      : PlaybackStatus.STOPPED;
+    return (
+      this.state.isPlaying &&
+      !!this.omx &&
+      this.omx.running &&
+      !this.state.isPending
+    );
   }
 
   public getMeta(): CastMeta | undefined {
     return this.state.meta;
   }
 
-  private promisifyAndBind(method: any): (...args: any[]) => Promise<any> {
-    return promisify(method.bind(this.omx));
+  public setMeta(meta: CastMeta): void {
+    this.state.meta = {
+      title: meta.title,
+      description: meta.description,
+      thumbnail: meta.thumbnail,
+      url: meta.url,
+    };
   }
 
   private resetState(): void {
