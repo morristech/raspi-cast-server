@@ -39,7 +39,6 @@ export class Player {
           { source, loop, output, noOsd },
           (err, data) => {
             if (err) {
-              console.error(err);
               reject(new Error(Errors.PLAYER_UNAVAILABLE));
             } else {
               resolve(data);
@@ -59,7 +58,7 @@ export class Player {
       this.close$.pipe(
         merge(
           fromEvent(this.omx as any, 'close'),
-          tap(() => (this.state.isPlaying = false)),
+          tap(() => this.resetState()),
         ),
       );
     });
@@ -160,11 +159,20 @@ export class Player {
       : PlaybackStatus.STOPPED;
   }
 
-  public getMeta() {
+  public getMeta(): CastMeta | undefined {
     return this.state.meta;
   }
 
-  private promisifyAndBind(method: any) {
+  private promisifyAndBind(method: any): (...args: any[]) => Promise<any> {
     return promisify(method.bind(this.omx));
+  }
+
+  private resetState(): void {
+    this.state = {
+      ...this.state,
+      isPending: false,
+      isPlaying: false,
+      meta: undefined,
+    };
   }
 }
