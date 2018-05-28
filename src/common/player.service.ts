@@ -2,9 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
-import { CastMeta, Errors } from 'raspi-cast-common';
-import { fromEvent, Subject } from 'rxjs';
-import { merge, tap } from 'rxjs/operators';
+import { mergeAll } from 'ramda';
+import { CastMeta, Errors, Playback, PlaybackStatus } from 'raspi-cast-common';
+import {
+  BehaviorSubject,
+  forkJoin,
+  from,
+  fromEvent,
+  Observable,
+  of,
+} from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 
 import { promisifyAndBind } from '../helpers/utils';
 
@@ -12,17 +20,17 @@ const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 
 export interface PlayerState {
   isPending: boolean;
-  isPlaying: boolean;
   meta?: CastMeta;
   volume?: number;
 }
 
 @Injectable()
 export class Player {
-  public close$ = new Subject<void>();
+  public close$: Observable<void>;
+  public status$ = new BehaviorSubject<Playback>(PlaybackStatus.STOPPED);
+
   private omx: OmxPlayer;
   private state: PlayerState = {
-    isPlaying: false,
     isPending: false,
   };
 
@@ -31,18 +39,26 @@ export class Player {
     loop = false,
     output = 'both',
     noOsd = false,
-  ): Promise<any> {
-    return new Promise((resolve, reject) => {
+  ): Observable<any> {
+    return new Observable(observer => {
+      if (this.status$.getValue() !== PlaybackStatus.STOPPED) {
+        this.status$.next(PlaybackStatus.STOPPED);
+      }
       const onSuccess = (err: Error, data: any) => {
         setTimeout(() => {
           console.log('new Omx', err, data);
           if (err) {
-            reject(err);
+            observer.error(err);
           } else {
             if (source !== spinner) {
-              this.state.isPlaying = true;
+              this.status$.next(PlaybackStatus.PLAYING);
+              this.close$ = fromEvent<void>(this.omx as any, 'close').pipe(
+                tap(() => console.log('close rxjs !!!!!')),
+                tap(() => this.status$.next(PlaybackStatus.STOPPED)),
+                tap(() => this.resetState()),
+              );
             }
-            resolve(data);
+            observer.next(data);
           }
         }, 5000);
       };
@@ -51,14 +67,22 @@ export class Player {
       } else {
         this.omx.newSource({ source, loop, output, noOsd }, onSuccess);
       }
-
-      this.close$.pipe(
-        merge(
-          fromEvent(this.omx as any, 'close'),
-          tap(() => this.resetState()),
-        ),
-      );
     });
+  }
+
+  public getInitialState(status: string): Observable<any> {
+    const actions = [
+      of({
+        status,
+        isPending: this.state.isPending,
+        meta: this.state.meta,
+      }),
+    ];
+    if (status !== PlaybackStatus.STOPPED.toString()) {
+      actions.push(from(this.getDuration()));
+      actions.push(from(this.getVolume()));
+    }
+    return forkJoin(actions).pipe(map(mergeAll));
   }
 
   public async getDuration(): Promise<any> {
@@ -78,6 +102,7 @@ export class Player {
   public async play(): Promise<any> {
     try {
       await promisifyAndBind(this.omx.play, this.omx)();
+      this.status$.next(PlaybackStatus.PLAYING);
     } catch (err) {
       throw new WsException(Errors.PLAYER_UNAVAILABLE);
     }
@@ -86,23 +111,20 @@ export class Player {
   public async pause() {
     try {
       await promisifyAndBind(this.omx.pause, this.omx)();
+      this.status$.next(PlaybackStatus.PAUSED);
     } catch (err) {
       throw new WsException(Errors.PLAYER_UNAVAILABLE);
     }
   }
 
-  public async getStatus(): Promise<any> {
-    try {
-      const status = await promisifyAndBind(
-        this.omx.getPlaybackStatus,
-        this.omx,
-      )();
-      return { status };
-    } catch (err) {
-      console.log('status err', err);
-      throw new WsException(Errors.PLAYER_UNAVAILABLE);
-    }
-  }
+  // public getStatus(): Observable<any> {
+  //   return bindCallback(this.omx.getPlaybackStatus.bind(this.omx))().pipe(
+  //     map(status => ({
+  //       status,
+  //     })),
+  //     catchError(() => throwError(Errors.PLAYER_UNAVAILABLE)),
+  //   );
+  // }
 
   public async getPosition(): Promise<any> {
     try {
@@ -128,6 +150,7 @@ export class Player {
   public async quit(): Promise<any> {
     try {
       await promisifyAndBind(this.omx.quit, this.omx)();
+      this.status$.next(PlaybackStatus.STOPPED);
     } catch (err) {
       throw new WsException(Errors.PLAYER_UNAVAILABLE);
     }
@@ -185,15 +208,11 @@ export class Player {
 
   public isPlaying(): boolean {
     return (
-      this.state.isPlaying &&
+      this.status$.getValue() === PlaybackStatus.PLAYING &&
       !!this.omx &&
       this.omx.running &&
       !this.state.isPending
     );
-  }
-
-  public getMeta(): CastMeta | undefined {
-    return this.state.meta;
   }
 
   public setMeta(meta: CastMeta): void {
@@ -209,7 +228,6 @@ export class Player {
     this.state = {
       ...this.state,
       isPending: false,
-      isPlaying: false,
       meta: undefined,
     };
   }

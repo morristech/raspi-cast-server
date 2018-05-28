@@ -8,15 +8,8 @@ import {
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
-import { mergeAll } from 'ramda';
-import {
-  CastOptions,
-  CastType,
-  InitialState,
-  Playback,
-  PlaybackStatus,
-} from 'raspi-cast-common';
-import { forkJoin, from, interval, Observable, of, Subscription } from 'rxjs';
+import { CastOptions, CastType, InitialState } from 'raspi-cast-common';
+import { from, interval, Observable, of, Subscription } from 'rxjs';
 import { catchError, filter, map, switchMap, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 // import uuid from 'uuid';
@@ -42,11 +35,10 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     @Inject(Screen) private screen: Screen,
     @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
   ) {
-    this.player.close$.subscribe(() => {
-      this.notifyStatusChange(PlaybackStatus.STOPPED);
-      if (process.env.NODE_ENV === 'production') {
-        this.screen.printIp();
-      }
+    this.player.status$.subscribe(status => {
+      this.clients.forEach(client => {
+        client.socket.emit('status', { status });
+      });
     });
   }
 
@@ -81,30 +73,12 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('initialState')
   public handleInitialState(client: Socket): Observable<WsResponse<any>> {
-    const data: any = {
-      isPending: false,
-      status: PlaybackStatus.STOPPED,
-      meta: this.player.getMeta(),
-    };
     console.log('initial state');
-    return this.player.isPlaying()
-      ? from(this.player.getStatus()).pipe(
-          switchMap(({ status }) => {
-            const actions = [of({ status })];
-            if (status === PlaybackStatus.PLAYING.toString()) {
-              actions.push(from(this.player.getDuration()));
-              actions.push(from(this.player.getVolume()));
-            }
-            return forkJoin(actions);
-          }),
-          map(mergeAll),
-          map(state => ({
-            event: 'initialState',
-            data: { ...data, ...state },
-          })),
-          catchError(this.handleError),
-        )
-      : of({ event: 'initialState', data });
+    return this.player.status$.pipe(
+      switchMap(status => this.player.getInitialState(status)),
+      map(data => ({ event: 'initialState', data })),
+      catchError(this.handleError),
+    );
   }
 
   @SubscribeMessage('cast')
@@ -112,9 +86,8 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     client: Socket,
     options: CastOptions,
   ): Observable<WsResponse<InitialState | any>> {
-    this.notifyStatusChange(PlaybackStatus.STOPPED);
     console.log('cast');
-    return from(this.player.init(undefined, true, 'both', true)).pipe(
+    return this.player.init(undefined, true, 'both', true).pipe(
       switchMap(() => {
         switch (options.type) {
           case CastType.YOUTUBEDL:
@@ -125,6 +98,12 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
       tap(meta => this.player.setMeta(meta)),
       tap(() => process.env.NODE_ENV === 'production' && this.screen.clear()),
       switchMap(({ url }) => this.player.init(url)),
+      tap(() => {
+        this.player.close$
+          .pipe(filter(() => process.env.NODE_ENV === 'production'))
+          .toPromise()
+          .then(() => this.screen.printIp());
+      }),
       switchMap(() => this.handleInitialState(client)),
       catchError(this.handleError),
     );
@@ -134,28 +113,25 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('play')
   public async handlePlay(client: Socket): Promise<void> {
     await this.player.play();
-    this.notifyStatusChange(PlaybackStatus.PLAYING);
   }
 
   @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('pause')
   public async handlePause(client: Socket): Promise<void> {
     await this.player.pause();
-    this.notifyStatusChange(PlaybackStatus.PAUSED);
   }
 
   @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('quit')
   public async handleQuit(client: Socket): Promise<void> {
     await this.player.quit();
-    this.notifyStatusChange(PlaybackStatus.STOPPED);
   }
 
-  @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('seek')
   public handleSeek(client: Socket, data: string): Observable<WsResponse<any>> {
     return from(this.player.setPosition(Number(data))).pipe(
       map(() => ({ event: 'seek', data: { isSeeking: false } })),
+      catchError(this.handleError),
     );
   }
 
@@ -163,6 +139,12 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('volume')
   public handleVolume(client: Socket, data: string): void {
     this.player.setVolume(parseFloat(data));
+  }
+
+  private handleError(err: WsException) {
+    logger.error(err);
+
+    return of({ event: 'fail', data: err });
   }
 
   // @SubscribeMessage('volume+')
@@ -184,16 +166,4 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   // public handleHideSubtitles(): Observable<WsResponse<any>> {
   //   return from(this.player.omx.showSubtitles());
   // }
-
-  private notifyStatusChange(status: Playback): void {
-    this.clients.forEach(client => {
-      client.socket.emit('status', { status });
-    });
-  }
-
-  private handleError(err: WsException) {
-    logger.error(err);
-
-    return of({ event: 'fail', data: err });
-  }
 }
