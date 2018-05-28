@@ -46,14 +46,12 @@ export class Player {
       }
       const onSuccess = (err: Error, data: any) => {
         setTimeout(() => {
-          console.log('new Omx', err, data);
           if (err) {
             observer.error(err);
           } else {
             if (source !== spinner) {
               this.status$.next(PlaybackStatus.PLAYING);
               this.close$ = fromEvent<void>(this.omx as any, 'close').pipe(
-                tap(() => console.log('close rxjs !!!!!')),
                 tap(() => this.status$.next(PlaybackStatus.STOPPED)),
                 tap(() => this.resetState()),
               );

@@ -45,7 +45,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @autobind
   public handleConnection(socket: Socket) {
     const address = socket.request.connection.remoteAddress;
-    console.log('connected', address);
     const subscription = interval(1000)
       .pipe(
         filter(() => this.player.isPlaying()),
@@ -73,7 +72,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('initialState')
   public handleInitialState(client: Socket): Observable<WsResponse<any>> {
-    console.log('initial state');
     return this.player.status$.pipe(
       switchMap(status => this.player.getInitialState(status)),
       map(data => ({ event: 'initialState', data })),
@@ -86,7 +84,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     client: Socket,
     options: CastOptions,
   ): Observable<WsResponse<InitialState | any>> {
-    console.log('cast');
     return this.player.init(undefined, true, 'both', true).pipe(
       switchMap(() => {
         switch (options.type) {
