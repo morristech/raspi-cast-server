@@ -1,20 +1,20 @@
-import { Inject, UseFilters } from '@nestjs/common';
+import { Inject, UseFilters, UseInterceptors } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
-  WsException,
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
 import { CastOptions, CastType, InitialState } from 'raspi-cast-common';
-import { from, interval, Observable, of, Subscription } from 'rxjs';
-import { catchError, filter, map, switchMap, tap } from 'rxjs/operators';
+import { from, interval, Observable, Subscription } from 'rxjs';
+import { filter, map, switchMap, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 // import uuid from 'uuid';
 
 import { CastExceptionFilter } from './common/exception.filter';
+import { LoggingInterceptor } from './common/logger.interceptor';
 import { Player } from './common/player.service';
 import { Screen } from './common/screen.service';
 import { logger } from './helpers/logger';
@@ -26,6 +26,7 @@ interface CastClient {
   subscription: Subscription;
 }
 
+@UseInterceptors(new LoggingInterceptor())
 @WebSocketGateway()
 export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
@@ -75,7 +76,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     return this.player.status$.pipe(
       switchMap(status => this.player.getInitialState(status)),
       map(data => ({ event: 'initialState', data })),
-      catchError(this.handleError),
     );
   }
 
@@ -101,8 +101,8 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
           .toPromise()
           .then(() => this.screen.printIp());
       }),
+      tap(() => logger.info('cast !!!! gatway')),
       switchMap(() => this.handleInitialState(client)),
-      catchError(this.handleError),
     );
   }
 
@@ -128,7 +128,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   public handleSeek(client: Socket, data: string): Observable<WsResponse<any>> {
     return from(this.player.setPosition(Number(data))).pipe(
       map(() => ({ event: 'seek', data: { isSeeking: false } })),
-      catchError(this.handleError),
     );
   }
 
@@ -136,12 +135,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('volume')
   public handleVolume(client: Socket, data: string): void {
     this.player.setVolume(parseFloat(data));
-  }
-
-  private handleError(err: WsException) {
-    logger.error(err);
-
-    return of({ event: 'fail', data: err });
   }
 
   // @SubscribeMessage('volume+')
