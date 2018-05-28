@@ -7,7 +7,7 @@ import {
   WsResponse,
 } from '@nestjs/websockets';
 import autobind from 'autobind-decorator';
-import { CastOptions, CastType, InitialState } from 'raspi-cast-common';
+import { CastOptions, InitialState } from 'raspi-cast-common';
 import { from, interval, Observable, Subscription } from 'rxjs';
 import { filter, map, switchMap, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
@@ -17,8 +17,7 @@ import { CastExceptionFilter } from './common/exception.filter';
 import { LoggingInterceptor } from './common/logger.interceptor';
 import { Player } from './common/player.service';
 import { Screen } from './common/screen.service';
-import { logger } from './helpers/logger';
-import { YoutubeDl } from './youtubedl/youtubeDl.service';
+import { VideoStream } from './stream/videoStream.service';
 
 interface CastClient {
   address: string;
@@ -34,7 +33,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     @Inject(Player) private player: Player,
     @Inject(Screen) private screen: Screen,
-    @Inject(YoutubeDl) private youtubeDl: YoutubeDl,
+    @Inject(VideoStream) private videoStream: VideoStream,
   ) {
     this.player.status$.subscribe(status => {
       this.clients.forEach(client => {
@@ -85,13 +84,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     options: CastOptions,
   ): Observable<WsResponse<InitialState | any>> {
     return this.player.init(undefined, true, 'both', true).pipe(
-      switchMap(() => {
-        switch (options.type) {
-          case CastType.YOUTUBEDL:
-          default:
-            return this.youtubeDl.getInfo(options.data);
-        }
-      }),
+      switchMap(() => this.videoStream.getMetaInfo(options)),
       tap(meta => this.player.setMeta(meta)),
       tap(() => process.env.NODE_ENV === 'production' && this.screen.clear()),
       switchMap(({ url }) => this.player.init(url)),
@@ -101,7 +94,6 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
           .toPromise()
           .then(() => this.screen.printIp());
       }),
-      tap(() => logger.info('cast !!!! gatway')),
       switchMap(() => this.handleInitialState(client)),
     );
   }
