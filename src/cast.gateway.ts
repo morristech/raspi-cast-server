@@ -9,13 +9,13 @@ import {
 import autobind from 'autobind-decorator';
 import { CastOptions, InitialState } from 'raspi-cast-common';
 import { from, interval, Observable, Subscription } from 'rxjs';
-import { filter, map, switchMap, tap } from 'rxjs/operators';
+import { filter, map, mapTo, switchMap, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 // import uuid from 'uuid';
 
 import { CastExceptionFilter } from './common/exception.filter';
 import { LoggingInterceptor } from './common/logger.interceptor';
-import { Player } from './common/player.service';
+import { VideoPlayer } from './common/player.interface';
 import { Screen } from './common/screen.service';
 import { VideoStream } from './stream/videoStream.service';
 
@@ -31,7 +31,7 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
   private clients: CastClient[] = [];
 
   constructor(
-    @Inject(Player) private player: Player,
+    @Inject('Player') private player: VideoPlayer,
     @Inject(Screen) private screen: Screen,
     @Inject(VideoStream) private videoStream: VideoStream,
   ) {
@@ -72,10 +72,9 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('initialState')
   public handleInitialState(client: Socket): Observable<WsResponse<any>> {
-    return this.player.status$.pipe(
-      switchMap(status => this.player.getInitialState(status)),
-      map(data => ({ event: 'initialState', data })),
-    );
+    return this.player
+      .getInitialState()
+      .pipe(map(data => ({ event: 'initialState', data })));
   }
 
   @SubscribeMessage('cast')
@@ -83,18 +82,23 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     client: Socket,
     options: CastOptions,
   ): Observable<WsResponse<InitialState | any>> {
-    return this.player.init(undefined, true, 'both', true).pipe(
-      switchMap(() => this.videoStream.getMetaInfo(options)),
-      tap(meta => this.player.setMeta(meta)),
-      tap(() => process.env.NODE_ENV === 'production' && this.screen.clear()),
-      switchMap(({ url }) => this.player.init(url)),
-      tap(() => {
-        this.player.close$
-          .pipe(filter(() => process.env.NODE_ENV === 'production'))
-          .toPromise()
-          .then(() => this.screen.printIp());
-      }),
-      switchMap(() => this.handleInitialState(client)),
+    return this.player
+      .init(undefined, true, 'both', true)
+      .pipe(
+        switchMap(() => this.videoStream.getMetaInfo(options)),
+        tap(this.player.setMeta),
+        tap(this.screen.clear),
+        switchMap(({ url }) => this.player.init(url)),
+        tap(this.listenPlayerClose),
+        switchMap(this.player.getInitialState),
+        map(data => ({ event: 'cast', data })),
+      );
+  }
+
+  @SubscribeMessage('seek')
+  public handleSeek(client: Socket, data: string): Observable<WsResponse<any>> {
+    return from(this.player.setPosition(Number(data))).pipe(
+      mapTo({ event: 'seek', data: { isSeeking: false } }),
     );
   }
 
@@ -116,17 +120,15 @@ export class CastSocket implements OnGatewayConnection, OnGatewayDisconnect {
     await this.player.quit();
   }
 
-  @SubscribeMessage('seek')
-  public handleSeek(client: Socket, data: string): Observable<WsResponse<any>> {
-    return from(this.player.setPosition(Number(data))).pipe(
-      map(() => ({ event: 'seek', data: { isSeeking: false } })),
-    );
-  }
-
   @UseFilters(new CastExceptionFilter())
   @SubscribeMessage('volume')
-  public handleVolume(client: Socket, data: string): void {
-    this.player.setVolume(parseFloat(data));
+  public async handleVolume(client: Socket, data: string): Promise<void> {
+    await this.player.setVolume(parseFloat(data));
+  }
+
+  @autobind
+  private listenPlayerClose(): void {
+    this.player.close$.toPromise().then(this.screen.printIp);
   }
 
   // @SubscribeMessage('volume+')

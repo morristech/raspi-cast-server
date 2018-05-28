@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CastSocket } from './cast.gateway';
 import { CastExceptionFilter } from './common/exception.filter';
-import { Player } from './common/player.service';
+import { OmxVideoPlayer } from './common/omxPlayer.service';
 import { Screen } from './common/screen.service';
 import { VideoStream } from './stream/videoStream.service';
 import { YoutubeDl } from './stream/youtubeDl.service';
@@ -10,7 +10,10 @@ import { YoutubeDl } from './stream/youtubeDl.service';
   providers: [
     CastExceptionFilter,
     CastSocket,
-    Player,
+    {
+      provide: 'Player',
+      useClass: OmxVideoPlayer,
+    },
     Screen,
     VideoStream,
     YoutubeDl,

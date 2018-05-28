@@ -12,7 +12,7 @@ export class LoggingInterceptor implements NestInterceptor {
   ): Observable<any> {
     const now = Date.now();
     return call$.pipe(
-      tap((data: any) => logger.info(`${Date.now() - now}ms - ${data.event}`)),
+      tap((data: any) => console.info(`${Date.now() - now}ms - ${data.event}`)),
       catchError(err => {
         logger.error(err);
 

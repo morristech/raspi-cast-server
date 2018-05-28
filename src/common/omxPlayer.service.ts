@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
+import autobind from 'autobind-decorator';
 import OmxPlayer from 'node-omxplayer-raspberry-pi-cast';
 import path from 'path';
 import { mergeAll } from 'ramda';
@@ -15,6 +16,7 @@ import {
 import { map, tap } from 'rxjs/operators';
 
 import { promisifyAndBind } from '../helpers/utils';
+import { VideoPlayer } from './player.interface';
 
 const spinner = path.join(process.cwd(), 'assets/loading-screen.mp4');
 
@@ -25,7 +27,7 @@ export interface PlayerState {
 }
 
 @Injectable()
-export class Player {
+export class OmxVideoPlayer implements VideoPlayer {
   public close$: Observable<void>;
   public status$ = new BehaviorSubject<Playback>(PlaybackStatus.STOPPED);
 
@@ -68,7 +70,9 @@ export class Player {
     });
   }
 
-  public getInitialState(status: string): Observable<any> {
+  @autobind
+  public getInitialState(): Observable<any> {
+    const status = this.status$.getValue();
     const actions = [
       of({
         status,
@@ -184,26 +188,6 @@ export class Player {
     }
   }
 
-  public async increaseVolume(): Promise<any> {
-    try {
-      this.state.volume = undefined;
-      await promisifyAndBind(this.omx.increaseVolume, this.omx)();
-      return this.getVolume();
-    } catch (err) {
-      throw new WsException(Errors.PLAYER_UNAVAILABLE);
-    }
-  }
-
-  public async decreaseVolume(): Promise<any> {
-    try {
-      this.state.volume = undefined;
-      await promisifyAndBind(this.omx.decreaseVolume, this.omx)();
-      return this.getVolume();
-    } catch (err) {
-      throw new WsException(Errors.PLAYER_UNAVAILABLE);
-    }
-  }
-
   public isPlaying(): boolean {
     return (
       this.status$.getValue() === PlaybackStatus.PLAYING &&
@@ -213,6 +197,7 @@ export class Player {
     );
   }
 
+  @autobind
   public setMeta(meta: CastMeta): void {
     this.state.meta = {
       title: meta.title,
@@ -229,4 +214,24 @@ export class Player {
       meta: undefined,
     };
   }
+
+  // public async increaseVolume(): Promise<any> {
+  //   try {
+  //     this.state.volume = undefined;
+  //     await promisifyAndBind(this.omx.increaseVolume, this.omx)();
+  //     return this.getVolume();
+  //   } catch (err) {
+  //     throw new WsException(Errors.PLAYER_UNAVAILABLE);
+  //   }
+  // }
+
+  // public async decreaseVolume(): Promise<any> {
+  //   try {
+  //     this.state.volume = undefined;
+  //     await promisifyAndBind(this.omx.decreaseVolume, this.omx)();
+  //     return this.getVolume();
+  //   } catch (err) {
+  //     throw new WsException(Errors.PLAYER_UNAVAILABLE);
+  //   }
+  // }
 }
